@@ -159,6 +159,8 @@
       :close-on-press-escape="true"
       @closed="handleDialogClose"
       @open="handleDialogOpen"
+      :modal-append-to-body="false"
+      append-to-body
     >
       <el-input
         v-model="newTaskName"
@@ -209,7 +211,7 @@
           <el-col :span="8">
             <el-card shadow="hover">
               <div class="statistic-item">
-                <div class="title">���处理</div>
+                <div class="title">待处理</div>
                 <div class="value warning">{{ rangeStats.pending }}</div>
               </div>
             </el-card>
@@ -285,7 +287,7 @@
       </div>
     </el-dialog>
 
-    <!-- 回收站对���框 -->
+    <!-- 回收站对话框 -->
     <el-dialog
       v-model="showRecycleBinDialog"
       title="回收站"
@@ -601,15 +603,26 @@ const handleAddTask = async () => {
   }
 }
 
-// 处理对话框打开
+// 修改处理对话框打开的方法
 const handleDialogOpen = () => {
   console.log('Dialog opened')
+  // 使用多个 nextTick 确保在 DOM 完全更新后再聚焦
   nextTick(() => {
-    console.log('Focusing task input after dialog open')
-    if (taskInput.value) {
-      taskInput.value.focus()
-      taskInput.value.select()
-    }
+    nextTick(() => {
+      if (taskInput.value) {
+        // 尝试多种方式获取和聚焦输入框
+        const input = taskInput.value.$el.querySelector('input') || taskInput.value.input || taskInput.value
+        if (input && typeof input.focus === 'function') {
+          input.focus()
+          input.select()
+          console.log('Input focused and selected')
+        } else {
+          console.warn('Could not focus input:', input)
+        }
+      } else {
+        console.warn('Task input ref not found')
+      }
+    })
   })
 }
 
@@ -734,7 +747,7 @@ const handleUpdateTaskDescription = async () => {
   }
 }
 
-// 处理���久删除任务
+// 处理久删除任务
 const handleHardDeleteTask = async (task: Task) => {
   try {
     const result = await window.electron.ipcRenderer.invoke('permanently-delete-task', task.id)
@@ -752,7 +765,7 @@ const handleHardDeleteTask = async (task: Task) => {
   }
 }
 
-// 修改打开任务详情的方法
+// 修改打开任务详���的方法
 const openTaskDetail = (task: Task) => {
   console.log('Opening task detail:', task)
   try {
@@ -1021,7 +1034,7 @@ const handleClearData = async () => {
   }
 }
 
-// 添加初始化任务统计的方法
+// 添加初始任务统计的方法
 const initializeTaskStats = async () => {
   try {
     // 加载各时间维度的任务
