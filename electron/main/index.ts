@@ -225,6 +225,116 @@ ipcMain.handle('get-deleted-tasks', () => {
   return tasks.filter(task => task.deleted)
 })
 
+// 添加获取所有统计数据的函数
+function getAllStats() {
+  return {
+    today: getTodayTasks(),
+    week: getWeekTasks(),
+    month: getMonthTasks(),
+    quarter: getQuarterTasks(),
+    year: getYearTasks(),
+    deleted: tasks.filter(t => t.deleted)
+  }
+}
+
+// 修改日期相关的辅助函数
+function isToday(date: Date, today: Date): boolean {
+  return date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+}
+
+function isThisWeek(date: Date, today: Date): boolean {
+  const todayTime = today.getTime()
+  const dateTime = date.getTime()
+  const dayOfWeek = today.getDay() || 7
+  const mondayTime = todayTime - (dayOfWeek - 1) * 86400000
+  const sundayTime = mondayTime + 6 * 86400000
+  return dateTime >= mondayTime && dateTime <= sundayTime
+}
+
+function isThisMonth(date: Date, today: Date): boolean {
+  return date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+}
+
+function isThisQuarter(date: Date, today: Date): boolean {
+  const quarter = Math.floor(today.getMonth() / 3)
+  const dateQuarter = Math.floor(date.getMonth() / 3)
+  return quarter === dateQuarter &&
+    date.getFullYear() === today.getFullYear()
+}
+
+function isThisYear(date: Date, today: Date): boolean {
+  return date.getFullYear() === today.getFullYear()
+}
+
+// 获取不同时间范围的任务
+function getTodayTasks() {
+  const today = new Date()
+  return tasks.filter(t => !t.deleted && isToday(new Date(t.createdAt), today))
+}
+
+function getWeekTasks() {
+  const today = new Date()
+  return tasks.filter(t => !t.deleted && isThisWeek(new Date(t.createdAt), today))
+}
+
+function getMonthTasks() {
+  const today = new Date()
+  return tasks.filter(t => !t.deleted && isThisMonth(new Date(t.createdAt), today))
+}
+
+function getQuarterTasks() {
+  const today = new Date()
+  return tasks.filter(t => !t.deleted && isThisQuarter(new Date(t.createdAt), today))
+}
+
+function getYearTasks() {
+  const today = new Date()
+  return tasks.filter(t => !t.deleted && isThisYear(new Date(t.createdAt), today))
+}
+
+// 修改时间范围任务查询处理器
+ipcMain.handle('get-range-tasks', (event, range: string) => {
+  console.log('Getting range tasks for:', range)
+  const today = new Date()
+  const allTasks = tasks.filter(t => !t.deleted)
+  let rangeTasks: any[] = []
+  
+  switch (range) {
+    case 'today':
+      rangeTasks = getTodayTasks()
+      break
+    case 'week':
+      rangeTasks = getWeekTasks()
+      break
+    case 'month':
+      rangeTasks = getMonthTasks()
+      break
+    case 'quarter':
+      rangeTasks = getQuarterTasks()
+      break
+    case 'year':
+      rangeTasks = getYearTasks()
+      break
+    default:
+      rangeTasks = allTasks
+  }
+  
+  console.log(`Found ${rangeTasks.length} tasks for range: ${range}`)
+  
+  return {
+    tasks: rangeTasks,
+    stats: {
+      total: rangeTasks.length,
+      completed: rangeTasks.filter(t => t.completed).length,
+      pending: rangeTasks.filter(t => !t.completed).length
+    }
+  }
+})
+
+// 修改添加任务的处理器
 ipcMain.handle('add-task', (event, task) => {
   console.log('Adding new task:', task)
   try {
@@ -238,14 +348,13 @@ ipcMain.handle('add-task', (event, task) => {
     saveTasks(tasks)
     console.log('Task added successfully:', newTask)
     
-    // 通知渲染进程更新统计数据
-    win?.webContents.send('tasks-stats-updated', {
-      today: getTodayTasks(),
-      week: getWeekTasks(),
-      month: getMonthTasks(),
-      quarter: getQuarterTasks(),
-      year: getYearTasks(),
-      deleted: getDeletedTasks()
+    // 获取最新的统计数据
+    const stats = getAllStats()
+    
+    // 通知渲染进程更新任务列表和统计数据
+    win?.webContents.send('task-added', {
+      task: newTask,
+      stats: stats
     })
     
     return newTask
@@ -255,6 +364,7 @@ ipcMain.handle('add-task', (event, task) => {
   }
 })
 
+// 修改更新任务的处理器
 ipcMain.handle('update-task', (event, updatedTask) => {
   const index = tasks.findIndex(t => t.id === updatedTask.id)
   if (index !== -1) {
@@ -264,11 +374,22 @@ ipcMain.handle('update-task', (event, updatedTask) => {
       updatedAt: new Date().toISOString()
     }
     saveTasks(tasks)
+    
+    // 获取最新的统计数据
+    const stats = getAllStats()
+    
+    // 通知渲染进程更新任务列表和统计数据
+    win?.webContents.send('task-updated', {
+      task: tasks[index],
+      stats: stats
+    })
+    
     return tasks[index]
   }
   return null
 })
 
+// 修改删除任务的处理器
 ipcMain.handle('delete-task', (event, taskId) => {
   const index = tasks.findIndex(t => t.id === taskId)
   if (index !== -1) {
@@ -278,11 +399,22 @@ ipcMain.handle('delete-task', (event, taskId) => {
       deletedAt: new Date().toISOString()
     }
     saveTasks(tasks)
+    
+    // 获取最新的统计数据
+    const stats = getAllStats()
+    
+    // 通知渲染进程更新任务列表和统计数据
+    win?.webContents.send('task-deleted', {
+      task: tasks[index],
+      stats: stats
+    })
+    
     return tasks[index]
   }
   return null
 })
 
+// 修改恢复任务的处理器
 ipcMain.handle('restore-task', (event, taskId) => {
   const index = tasks.findIndex(t => t.id === taskId)
   if (index !== -1) {
@@ -293,6 +425,16 @@ ipcMain.handle('restore-task', (event, taskId) => {
       restoredAt: new Date().toISOString()
     }
     saveTasks(tasks)
+    
+    // 获取最新的统计数据
+    const stats = getAllStats()
+    
+    // 通知渲染进程更新任务列表和统计数据
+    win?.webContents.send('task-restored', {
+      task: tasks[index],
+      stats: stats
+    })
+    
     return tasks[index]
   }
   return null
@@ -373,103 +515,6 @@ ipcMain.handle('clear-all-data', async () => {
     return {
       success: false,
       error: error.message
-    }
-  }
-})
-
-// 添加日期相关的辅助函数
-function isToday(date: Date, today: Date): boolean {
-  return date.getDate() === today.getDate() &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear()
-}
-
-function isThisWeek(date: Date, today: Date): boolean {
-  const todayWeek = today.getDate() - today.getDay()
-  const dateWeek = date.getDate() - date.getDay()
-  return todayWeek === dateWeek &&
-    date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear()
-}
-
-function isThisMonth(date: Date, today: Date): boolean {
-  return date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear()
-}
-
-function isThisQuarter(date: Date, today: Date): boolean {
-  const quarter = Math.floor(today.getMonth() / 3)
-  const dateQuarter = Math.floor(date.getMonth() / 3)
-  return quarter === dateQuarter &&
-    date.getFullYear() === today.getFullYear()
-}
-
-function isThisYear(date: Date, today: Date): boolean {
-  return date.getFullYear() === today.getFullYear()
-}
-
-// 获取不同时间范围的任务
-function getTodayTasks() {
-  const today = new Date()
-  return tasks.filter(t => !t.deleted && isToday(new Date(t.createdAt), today))
-}
-
-function getWeekTasks() {
-  const today = new Date()
-  return tasks.filter(t => !t.deleted && isThisWeek(new Date(t.createdAt), today))
-}
-
-function getMonthTasks() {
-  const today = new Date()
-  return tasks.filter(t => !t.deleted && isThisMonth(new Date(t.createdAt), today))
-}
-
-function getQuarterTasks() {
-  const today = new Date()
-  return tasks.filter(t => !t.deleted && isThisQuarter(new Date(t.createdAt), today))
-}
-
-function getYearTasks() {
-  const today = new Date()
-  return tasks.filter(t => !t.deleted && isThisYear(new Date(t.createdAt), today))
-}
-
-function getDeletedTasks() {
-  return tasks.filter(t => t.deleted)
-}
-
-// 添加时间范围任查询处理器
-ipcMain.handle('get-range-tasks', (event, range: string) => {
-  const today = new Date()
-  const allTasks = tasks.filter(t => !t.deleted)
-  let rangeTasks: any[] = []
-  
-  switch (range) {
-    case 'today':
-      rangeTasks = allTasks.filter(t => isToday(new Date(t.createdAt), today))
-      break
-    case 'week':
-      rangeTasks = allTasks.filter(t => isThisWeek(new Date(t.createdAt), today))
-      break
-    case 'month':
-      rangeTasks = allTasks.filter(t => isThisMonth(new Date(t.createdAt), today))
-      break
-    case 'quarter':
-      rangeTasks = allTasks.filter(t => isThisQuarter(new Date(t.createdAt), today))
-      break
-    case 'year':
-      rangeTasks = allTasks.filter(t => isThisYear(new Date(t.createdAt), today))
-      break
-    default:
-      rangeTasks = allTasks
-  }
-  
-  return {
-    tasks: rangeTasks,
-    stats: {
-      total: rangeTasks.length,
-      completed: rangeTasks.filter(t => t.completed).length,
-      pending: rangeTasks.filter(t => !t.completed).length
     }
   }
 }) 

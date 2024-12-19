@@ -184,6 +184,91 @@ electron.ipcMain.handle("get-tasks", () => {
 electron.ipcMain.handle("get-deleted-tasks", () => {
   return tasks.filter((task) => task.deleted);
 });
+function getAllStats() {
+  return {
+    today: getTodayTasks(),
+    week: getWeekTasks(),
+    month: getMonthTasks(),
+    quarter: getQuarterTasks(),
+    year: getYearTasks(),
+    deleted: tasks.filter((t) => t.deleted)
+  };
+}
+function isToday(date, today) {
+  return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+}
+function isThisWeek(date, today) {
+  const todayTime = today.getTime();
+  const dateTime = date.getTime();
+  const dayOfWeek = today.getDay() || 7;
+  const mondayTime = todayTime - (dayOfWeek - 1) * 864e5;
+  const sundayTime = mondayTime + 6 * 864e5;
+  return dateTime >= mondayTime && dateTime <= sundayTime;
+}
+function isThisMonth(date, today) {
+  return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+}
+function isThisQuarter(date, today) {
+  const quarter = Math.floor(today.getMonth() / 3);
+  const dateQuarter = Math.floor(date.getMonth() / 3);
+  return quarter === dateQuarter && date.getFullYear() === today.getFullYear();
+}
+function isThisYear(date, today) {
+  return date.getFullYear() === today.getFullYear();
+}
+function getTodayTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isToday(new Date(t.createdAt), today));
+}
+function getWeekTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isThisWeek(new Date(t.createdAt), today));
+}
+function getMonthTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isThisMonth(new Date(t.createdAt), today));
+}
+function getQuarterTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isThisQuarter(new Date(t.createdAt), today));
+}
+function getYearTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isThisYear(new Date(t.createdAt), today));
+}
+electron.ipcMain.handle("get-range-tasks", (event, range) => {
+  console.log("Getting range tasks for:", range);
+  const allTasks = tasks.filter((t) => !t.deleted);
+  let rangeTasks = [];
+  switch (range) {
+    case "today":
+      rangeTasks = getTodayTasks();
+      break;
+    case "week":
+      rangeTasks = getWeekTasks();
+      break;
+    case "month":
+      rangeTasks = getMonthTasks();
+      break;
+    case "quarter":
+      rangeTasks = getQuarterTasks();
+      break;
+    case "year":
+      rangeTasks = getYearTasks();
+      break;
+    default:
+      rangeTasks = allTasks;
+  }
+  console.log(`Found ${rangeTasks.length} tasks for range: ${range}`);
+  return {
+    tasks: rangeTasks,
+    stats: {
+      total: rangeTasks.length,
+      completed: rangeTasks.filter((t) => t.completed).length,
+      pending: rangeTasks.filter((t) => !t.completed).length
+    }
+  };
+});
 electron.ipcMain.handle("add-task", (event, task) => {
   console.log("Adding new task:", task);
   try {
@@ -196,13 +281,10 @@ electron.ipcMain.handle("add-task", (event, task) => {
     tasks.push(newTask);
     saveTasks(tasks);
     console.log("Task added successfully:", newTask);
-    win?.webContents.send("tasks-stats-updated", {
-      today: getTodayTasks(),
-      week: getWeekTasks(),
-      month: getMonthTasks(),
-      quarter: getQuarterTasks(),
-      year: getYearTasks(),
-      deleted: getDeletedTasks()
+    const stats = getAllStats();
+    win?.webContents.send("task-added", {
+      task: newTask,
+      stats
     });
     return newTask;
   } catch (error) {
@@ -219,6 +301,11 @@ electron.ipcMain.handle("update-task", (event, updatedTask) => {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     saveTasks(tasks);
+    const stats = getAllStats();
+    win?.webContents.send("task-updated", {
+      task: tasks[index],
+      stats
+    });
     return tasks[index];
   }
   return null;
@@ -232,6 +319,11 @@ electron.ipcMain.handle("delete-task", (event, taskId) => {
       deletedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     saveTasks(tasks);
+    const stats = getAllStats();
+    win?.webContents.send("task-deleted", {
+      task: tasks[index],
+      stats
+    });
     return tasks[index];
   }
   return null;
@@ -246,6 +338,11 @@ electron.ipcMain.handle("restore-task", (event, taskId) => {
       restoredAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     saveTasks(tasks);
+    const stats = getAllStats();
+    win?.webContents.send("task-restored", {
+      task: tasks[index],
+      stats
+    });
     return tasks[index];
   }
   return null;
@@ -311,78 +408,4 @@ electron.ipcMain.handle("clear-all-data", async () => {
       error: error.message
     };
   }
-});
-function isToday(date, today) {
-  return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-}
-function isThisWeek(date, today) {
-  const todayWeek = today.getDate() - today.getDay();
-  const dateWeek = date.getDate() - date.getDay();
-  return todayWeek === dateWeek && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-}
-function isThisMonth(date, today) {
-  return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-}
-function isThisQuarter(date, today) {
-  const quarter = Math.floor(today.getMonth() / 3);
-  const dateQuarter = Math.floor(date.getMonth() / 3);
-  return quarter === dateQuarter && date.getFullYear() === today.getFullYear();
-}
-function isThisYear(date, today) {
-  return date.getFullYear() === today.getFullYear();
-}
-function getTodayTasks() {
-  const today = /* @__PURE__ */ new Date();
-  return tasks.filter((t) => !t.deleted && isToday(new Date(t.createdAt), today));
-}
-function getWeekTasks() {
-  const today = /* @__PURE__ */ new Date();
-  return tasks.filter((t) => !t.deleted && isThisWeek(new Date(t.createdAt), today));
-}
-function getMonthTasks() {
-  const today = /* @__PURE__ */ new Date();
-  return tasks.filter((t) => !t.deleted && isThisMonth(new Date(t.createdAt), today));
-}
-function getQuarterTasks() {
-  const today = /* @__PURE__ */ new Date();
-  return tasks.filter((t) => !t.deleted && isThisQuarter(new Date(t.createdAt), today));
-}
-function getYearTasks() {
-  const today = /* @__PURE__ */ new Date();
-  return tasks.filter((t) => !t.deleted && isThisYear(new Date(t.createdAt), today));
-}
-function getDeletedTasks() {
-  return tasks.filter((t) => t.deleted);
-}
-electron.ipcMain.handle("get-range-tasks", (event, range) => {
-  const today = /* @__PURE__ */ new Date();
-  const allTasks = tasks.filter((t) => !t.deleted);
-  let rangeTasks = [];
-  switch (range) {
-    case "today":
-      rangeTasks = allTasks.filter((t) => isToday(new Date(t.createdAt), today));
-      break;
-    case "week":
-      rangeTasks = allTasks.filter((t) => isThisWeek(new Date(t.createdAt), today));
-      break;
-    case "month":
-      rangeTasks = allTasks.filter((t) => isThisMonth(new Date(t.createdAt), today));
-      break;
-    case "quarter":
-      rangeTasks = allTasks.filter((t) => isThisQuarter(new Date(t.createdAt), today));
-      break;
-    case "year":
-      rangeTasks = allTasks.filter((t) => isThisYear(new Date(t.createdAt), today));
-      break;
-    default:
-      rangeTasks = allTasks;
-  }
-  return {
-    tasks: rangeTasks,
-    stats: {
-      total: rangeTasks.length,
-      completed: rangeTasks.filter((t) => t.completed).length,
-      pending: rangeTasks.filter((t) => !t.completed).length
-    }
-  };
 });

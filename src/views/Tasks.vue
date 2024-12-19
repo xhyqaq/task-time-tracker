@@ -43,14 +43,6 @@
         </el-card>
       </el-col>
       <el-col :span="4">
-        <el-card shadow="hover">
-          <div class="statistic-item">
-            <div class="title">总任务</div>
-            <div class="value">{{ tasks.length }}</div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="4">
         <el-card shadow="hover" class="clickable" @click="showConfig">
           <div class="statistic-item">
             <div class="title">系统配置</div>
@@ -63,7 +55,7 @@
     </el-row>
 
     <el-row :gutter="20" class="statistics-cards">
-      <el-col :span="8">
+      <el-col :span="12">
         <el-card shadow="hover">
           <div class="statistic-item">
             <div class="title">待处理</div>
@@ -71,19 +63,11 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="8">
+      <el-col :span="12">
         <el-card shadow="hover">
           <div class="statistic-item">
             <div class="title">已完成</div>
             <div class="value">{{ completedTasks.length }}</div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
-        <el-card shadow="hover" class="clickable recycle-bin-card" @click="showRecycleBin">
-          <div class="statistic-item">
-            <div class="title">回收站</div>
-            <div class="value danger">{{ deletedTasks.length }}</div>
           </div>
         </el-card>
       </el-col>
@@ -206,7 +190,7 @@
       <div class="task-dashboard">
         <!-- 仪表盘统计 -->
         <el-row :gutter="20" class="dashboard-stats">
-          <el-col :span="6">
+          <el-col :span="8">
             <el-card shadow="hover">
               <div class="statistic-item">
                 <div class="title">总任务数</div>
@@ -214,7 +198,7 @@
               </div>
             </el-card>
           </el-col>
-          <el-col :span="6">
+          <el-col :span="8">
             <el-card shadow="hover">
               <div class="statistic-item">
                 <div class="title">已完成</div>
@@ -222,19 +206,11 @@
               </div>
             </el-card>
           </el-col>
-          <el-col :span="6">
+          <el-col :span="8">
             <el-card shadow="hover">
               <div class="statistic-item">
-                <div class="title">待处理</div>
+                <div class="title">���处理</div>
                 <div class="value warning">{{ rangeStats.pending }}</div>
-              </div>
-            </el-card>
-          </el-col>
-          <el-col :span="6">
-            <el-card shadow="hover" class="clickable" @click="showRecycleBin">
-              <div class="statistic-item">
-                <div class="title">回收站</div>
-                <div class="value danger">{{ deletedTasks.length }}</div>
               </div>
             </el-card>
           </el-col>
@@ -309,7 +285,7 @@
       </div>
     </el-dialog>
 
-    <!-- 回收站对话框 -->
+    <!-- 回收站对���框 -->
     <el-dialog
       v-model="showRecycleBinDialog"
       title="回收站"
@@ -626,7 +602,7 @@ const handleDialogClose = () => {
   isProcessingTask.value = false
 }
 
-// 监听主进程发来的新任务
+// 监听主程发来的新任务
 const handleNewTask = (taskData: any) => {
   try {
     if (!taskData || typeof taskData.name !== 'string') {
@@ -1021,6 +997,38 @@ const handleClearData = async () => {
   }
 }
 
+// 添加初始化任务统计的方法
+const initializeTaskStats = async () => {
+  try {
+    // 加载各时间维度的任务
+    const ranges = ['today', 'week', 'month', 'quarter', 'year']
+    for (const range of ranges) {
+      const result = await window.electron.ipcRenderer.invoke('get-range-tasks', range)
+      if (result && result.tasks) {
+        switch (range) {
+          case 'today':
+            todayTasks.value = result.tasks
+            break
+          case 'week':
+            weekTasks.value = result.tasks
+            break
+          case 'month':
+            monthTasks.value = result.tasks
+            break
+          case 'quarter':
+            quarterTasks.value = result.tasks
+            break
+          case 'year':
+            yearTasks.value = result.tasks
+            break
+        }
+      }
+    }
+  } catch (error) {
+    handleError(error, 'initializeTaskStats')
+  }
+}
+
 // 修改 onMounted 钩子
 onMounted(async () => {
   console.log('Tasks component mounted')
@@ -1030,12 +1038,84 @@ onMounted(async () => {
     tasksViewRef.value.focus()
   }
 
+  // 初始化任务统计
+  await initializeTaskStats()
+
   // 初始化事件监听
-  window.electron.ipcRenderer.on('task-added', (task: any) => {
-    console.log('Task added:', task)
-    handleNewTask(task)
+  window.electron.ipcRenderer.on('task-added', async (data: any) => {
+    console.log('Task added event received:', data)
+    if (data.task) {
+      handleNewTask(data.task)
+    }
+    if (data.stats) {
+      // 更新各时间维度的任务统计
+      updateTaskStats(data.stats)
+    }
   })
-  
+
+  window.electron.ipcRenderer.on('task-updated', async (data: any) => {
+    console.log('Task updated event received:', data)
+    if (data.task) {
+      handleTaskUpdate(data.task)
+    }
+    if (data.stats) {
+      updateTaskStats(data.stats)
+    }
+  })
+
+  window.electron.ipcRenderer.on('task-deleted', async (data: any) => {
+    console.log('Task deleted event received:', data)
+    if (data.task) {
+      const deletedTask = data.task
+      const index = tasks.value.findIndex(t => t.id === deletedTask.id)
+      if (index !== -1) {
+        const taskWithDates = {
+          ...deletedTask,
+          deleted: true,
+          deletedAt: deletedTask.deletedAt || new Date().toISOString(),
+          createdAt: deletedTask.createdAt || new Date().toISOString()
+        }
+        tasks.value[index] = taskWithDates
+        
+        // 检查任务是否已经在回收站中
+        const existingIndex = deletedTasks.value.findIndex(t => t.id === deletedTask.id)
+        if (existingIndex === -1) {
+          deletedTasks.value.push(taskWithDates)
+        }
+      }
+    }
+    if (data.stats) {
+      updateTaskStats(data.stats)
+    }
+  })
+
+  window.electron.ipcRenderer.on('task-restored', async (data: any) => {
+    console.log('Task restored event received:', data)
+    if (data.task) {
+      const restoredTask = data.task
+      const index = tasks.value.findIndex(t => t.id === restoredTask.id)
+      if (index !== -1) {
+        // 保留原始任务的所有数据
+        const taskWithAllData = {
+          ...tasks.value[index],
+          ...restoredTask,
+          deleted: false,
+          deletedAt: null
+        }
+        tasks.value[index] = taskWithAllData
+        
+        // 从回收站中移除
+        const deletedIndex = deletedTasks.value.findIndex(t => t.id === restoredTask.id)
+        if (deletedIndex !== -1) {
+          deletedTasks.value.splice(deletedIndex, 1)
+        }
+      }
+    }
+    if (data.stats) {
+      updateTaskStats(data.stats)
+    }
+  })
+
   // 添加 Command + I 快捷键处理
   const quickAddHandler = (e: KeyboardEvent) => {
     console.log('Quick add shortcut check:', e.key)
@@ -1180,6 +1260,17 @@ const showConfig = async () => {
     console.error('Failed to load config:', error)
     ElMessage.error('加载配置信息失败')
   }
+}
+
+// 添加更新任务统计的辅助函数
+const updateTaskStats = (stats: any) => {
+  console.log('Updating task stats:', stats)
+  if (stats.today) todayTasks.value = stats.today
+  if (stats.week) weekTasks.value = stats.week
+  if (stats.month) monthTasks.value = stats.month
+  if (stats.quarter) quarterTasks.value = stats.quarter
+  if (stats.year) yearTasks.value = stats.year
+  if (stats.deleted) deletedTasks.value = stats.deleted
 }
 </script>
 
