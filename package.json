@@ -1,0 +1,41 @@
+{
+  "name": "task-time-tracker",
+  "version": "1.0.0",
+  "description": "A modern task management and time tracking application",
+  "main": "dist-electron/main/index.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development electron-vite dev --watch",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "build:win": "npm run build && electron-builder --win --config",
+    "build:mac": "npm run build && electron-builder --mac --config",
+    "build:linux": "npm run build && electron-builder --linux --config"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "element-plus": "^2.5.3",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.15",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.10",
+    "@vitejs/plugin-vue": "^5.0.3",
+    "cross-env": "^7.0.3",
+    "electron": "^28.1.4",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "sass": "^1.83.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vue-tsc": "^1.8.27"
+  },
+  "keywords": [
+    "electron",
+    "vue",
+    "task-management",
+    "time-tracking"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
