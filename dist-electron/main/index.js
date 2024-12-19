@@ -184,6 +184,16 @@ electron.ipcMain.handle("get-tasks", () => {
 electron.ipcMain.handle("get-deleted-tasks", () => {
   return tasks.filter((task) => task.deleted);
 });
+function getAllStats() {
+  return {
+    today: getTodayTasks(),
+    week: getWeekTasks(),
+    month: getMonthTasks(),
+    quarter: getQuarterTasks(),
+    year: getYearTasks(),
+    deleted: tasks.filter((t) => t.deleted)
+  };
+}
 function isToday(date, today) {
   return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
 }
@@ -226,52 +236,6 @@ function getYearTasks() {
   const today = /* @__PURE__ */ new Date();
   return tasks.filter((t) => !t.deleted && isThisYear(new Date(t.createdAt), today));
 }
-function getAllStats() {
-  const activeTasks = tasks.filter((t) => !t.deleted);
-  const todayTasks = getTodayTasks();
-  const weekTasks = getWeekTasks();
-  const monthTasks = getMonthTasks();
-  const quarterTasks = getQuarterTasks();
-  const yearTasks = getYearTasks();
-  return {
-    today: {
-      tasks: todayTasks,
-      total: todayTasks.length,
-      completed: todayTasks.filter((t) => t.completed).length,
-      pending: todayTasks.filter((t) => !t.completed).length
-    },
-    week: {
-      tasks: weekTasks,
-      total: weekTasks.length,
-      completed: weekTasks.filter((t) => t.completed).length,
-      pending: weekTasks.filter((t) => !t.completed).length
-    },
-    month: {
-      tasks: monthTasks,
-      total: monthTasks.length,
-      completed: monthTasks.filter((t) => t.completed).length,
-      pending: monthTasks.filter((t) => !t.completed).length
-    },
-    quarter: {
-      tasks: quarterTasks,
-      total: quarterTasks.length,
-      completed: quarterTasks.filter((t) => t.completed).length,
-      pending: quarterTasks.filter((t) => !t.completed).length
-    },
-    year: {
-      tasks: yearTasks,
-      total: yearTasks.length,
-      completed: yearTasks.filter((t) => t.completed).length,
-      pending: yearTasks.filter((t) => !t.completed).length
-    },
-    all: {
-      total: activeTasks.length,
-      completed: activeTasks.filter((t) => t.completed).length,
-      pending: activeTasks.filter((t) => !t.completed).length,
-      deleted: tasks.filter((t) => t.deleted).length
-    }
-  };
-}
 electron.ipcMain.handle("get-range-tasks", (event, range) => {
   console.log("Getting range tasks for:", range);
   const allTasks = tasks.filter((t) => !t.deleted);
@@ -306,6 +270,7 @@ electron.ipcMain.handle("get-range-tasks", (event, range) => {
   };
 });
 electron.ipcMain.handle("add-task", (event, task) => {
+  console.log("Adding new task:", task);
   try {
     const newTask = {
       ...task,
@@ -315,6 +280,7 @@ electron.ipcMain.handle("add-task", (event, task) => {
     };
     tasks.push(newTask);
     saveTasks(tasks);
+    console.log("Task added successfully:", newTask);
     const stats = getAllStats();
     win?.webContents.send("task-added", {
       task: newTask,

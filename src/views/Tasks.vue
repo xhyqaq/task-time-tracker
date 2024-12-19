@@ -55,7 +55,7 @@
     </el-row>
 
     <el-row :gutter="20" class="statistics-cards">
-      <el-col :span="12">
+      <el-col :span="6">
         <el-card shadow="hover">
           <div class="statistic-item">
             <div class="title">待处理</div>
@@ -63,11 +63,29 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="12">
+      <el-col :span="6">
         <el-card shadow="hover">
           <div class="statistic-item">
             <div class="title">已完成</div>
             <div class="value">{{ completedTasks.length }}</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover" class="clickable recycle-bin-card" @click="showRecycleBin">
+          <div class="statistic-item">
+            <div class="title">回收站</div>
+            <div class="value danger">{{ deletedTasks.length }}</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover" class="clickable" @click="showConfig">
+          <div class="statistic-item">
+            <div class="title">系统配置</div>
+            <div class="value">
+              <el-icon><Setting /></el-icon>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -765,7 +783,7 @@ const handleHardDeleteTask = async (task: Task) => {
   }
 }
 
-// 修改打开任务详���的方法
+// 修改打开任务详情的方法
 const openTaskDetail = (task: Task) => {
   console.log('Opening task detail:', task)
   try {
@@ -1335,6 +1353,25 @@ const updateTaskStats = (stats: any) => {
         font-size: 24px;
         font-weight: bold;
         color: var(--el-color-primary);
+
+        &.danger {
+          color: var(--el-color-danger);
+        }
+
+        .el-icon {
+          font-size: 24px;
+          color: var(--el-color-primary);
+        }
+      }
+    }
+
+    .recycle-bin-card {
+      &:hover {
+        border-color: var(--el-color-danger);
+        
+        .value.danger {
+          transform: scale(1.1);
+        }
       }
     }
   }
