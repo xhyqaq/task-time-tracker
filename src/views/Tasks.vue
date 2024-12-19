@@ -2,7 +2,7 @@
   <div class="tasks-view" @keydown="handleKeyboardShortcuts" tabindex="0" ref="tasksViewRef">
     <!-- 统计卡片 -->
     <el-row :gutter="20" class="statistics-cards">
-      <el-col :span="4">
+      <el-col :span="4" :offset="2">
         <el-card shadow="hover" class="clickable" @click="showRangeTasks('today')">
           <div class="statistic-item">
             <div class="title">今日任务</div>
@@ -39,16 +39,6 @@
           <div class="statistic-item">
             <div class="title">本年度任务</div>
             <div class="value">{{ yearTasks.length }}</div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="4">
-        <el-card shadow="hover" class="clickable" @click="showConfig">
-          <div class="statistic-item">
-            <div class="title">系统配置</div>
-            <div class="value">
-              <el-icon><Setting /></el-icon>
-            </div>
           </div>
         </el-card>
       </el-col>
@@ -1293,7 +1283,7 @@ watch(taskDetailVisible, (newValue) => {
 
 console.log('Tasks component setup complete')
 
-// 添加配置相关的状态
+// 加配置相关的状态
 const configInfo = ref({
   dataPath: '',
   version: '',
@@ -1341,36 +1331,34 @@ const updateTaskStats = (stats: any) => {
 
     .statistic-item {
       text-align: center;
-      padding: 10px;
+      padding: 15px;  // 增加内边距
+      transition: all 0.3s ease;  // 添加过渡效果
 
       .title {
         color: var(--el-text-color-secondary);
         font-size: 14px;
-        margin-bottom: 8px;
+        margin-bottom: 12px;  // 增加标题和数值的间距
+        font-weight: 500;  // 加粗标题
       }
 
       .value {
-        font-size: 24px;
+        font-size: 28px;  // 增大数字大小
         font-weight: bold;
         color: var(--el-color-primary);
-
-        &.danger {
-          color: var(--el-color-danger);
-        }
-
-        .el-icon {
-          font-size: 24px;
-          color: var(--el-color-primary);
-        }
+        line-height: 1.2;  // 调整行高
       }
     }
 
-    .recycle-bin-card {
+    .el-card {
+      border-radius: 8px;  // 增加圆角
+      transition: all 0.3s ease;
+      
       &:hover {
-        border-color: var(--el-color-danger);
+        transform: translateY(-5px);  // 悬浮时上移
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);  // 增强悬浮时的阴影
         
-        .value.danger {
-          transform: scale(1.1);
+        .value {
+          transform: scale(1.1);  // 数字放大效果
         }
       }
     }
