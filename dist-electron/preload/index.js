@@ -4,27 +4,28 @@ console.log("Preload script starting...");
 try {
   console.log("Setting up IPC bridge...");
   const validChannels = [
+    "get-tasks",
+    "get-deleted-tasks",
     "add-task",
     "update-task",
     "delete-task",
     "restore-task",
-    "get-tasks",
-    "get-range-tasks",
-    "task-added",
-    "task-updated",
-    "task-deleted",
-    "task-restored",
-    "tasks-loaded",
-    "tasks-stats-updated",
-    "range-tasks-loaded"
+    "permanently-delete-task",
+    "load-tasks",
+    "get-config",
+    "update-config",
+    "select-data-path",
+    "clear-all-data",
+    "get-range-tasks"
   ];
   electron.contextBridge.exposeInMainWorld("electron", {
     ipcRenderer: {
-      send: (channel, ...args) => {
+      invoke: async (channel, ...args) => {
         if (validChannels.includes(channel)) {
-          console.log("IPC Send:", channel, args);
-          electron.ipcRenderer.send(channel, ...args);
+          console.log("IPC Invoke:", channel, args);
+          return await electron.ipcRenderer.invoke(channel, ...args);
         }
+        throw new Error(`Invalid channel: ${channel}`);
       },
       on: (channel, func) => {
         if (validChannels.includes(channel)) {

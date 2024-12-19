@@ -50,6 +50,16 @@
           </div>
         </el-card>
       </el-col>
+      <el-col :span="4">
+        <el-card shadow="hover" class="clickable" @click="showConfig">
+          <div class="statistic-item">
+            <div class="title">系统配置</div>
+            <div class="value">
+              <el-icon><Setting /></el-icon>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
     </el-row>
 
     <el-row :gutter="20" class="statistics-cards">
@@ -365,12 +375,58 @@
         </el-card>
       </div>
     </el-dialog>
+
+    <!-- 配置对话框 -->
+    <el-dialog
+      v-model="showConfigDialog"
+      title="系统配置"
+      width="50%"
+      destroy-on-close
+    >
+      <div class="config-container">
+        <el-form label-width="120px">
+          <el-form-item label="数据存储路径">
+            <div class="path-selector">
+              <el-input v-model="configInfo.dataPath" readonly />
+              <el-button type="primary" @click="handleSelectDataPath">
+                选择路径
+              </el-button>
+            </div>
+          </el-form-item>
+          <el-form-item label="版本信息">
+            <el-tag>{{ configInfo.version || '1.0.0' }}</el-tag>
+          </el-form-item>
+          <el-form-item label="最后备份时间">
+            <span>{{ configInfo.lastBackup ? formatDate(configInfo.lastBackup) : '从未备份' }}</span>
+          </el-form-item>
+          <el-divider />
+          <el-form-item label="数据管理">
+            <div class="data-management">
+              <el-button type="primary" @click="handleExportData">
+                导出数据
+              </el-button>
+              <el-button type="warning" @click="handleImportData">
+                导入数据
+              </el-button>
+              <el-popconfirm
+                title="确定要清空所有数据吗？此操作不可恢复！"
+                @confirm="handleClearData"
+              >
+                <template #reference>
+                  <el-button type="danger">清空数据</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useKeyboardShortcuts } from '../components/KeyboardShortcuts'
 
@@ -381,11 +437,11 @@ declare global {
   interface Window {
     electron: {
       ipcRenderer: {
-        send: (channel: string, ...args: any[]) => void;
-        on: (channel: string, func: (...args: any[]) => void) => void;
-        removeAllListeners: (channel: string) => void;
-      };
-    };
+        invoke(channel: string, ...args: any[]): Promise<any>
+        on(channel: string, func: (...args: any[]) => void): void
+        removeAllListeners(channel: string): void
+      }
+    }
   }
 }
 
@@ -414,37 +470,29 @@ const closeRecycleBin = () => {
 }
 
 // 修改删除任务的方法
-const deleteTask = (task: Task) => {
+const deleteTask = async (task: Task) => {
   console.log('Deleting task:', task)
   if (!task || task.deleted) return
   
   try {
     const now = new Date().toISOString()
-    const taskToDelete = {
-      ...task,
-      deleted: true,
-      deletedAt: now
+    const deletedTask = await window.electron.ipcRenderer.invoke('delete-task', task.id)
+    
+    if (deletedTask) {
+      // 更新本地状态
+      const index = tasks.value.findIndex(t => t.id === task.id)
+      if (index !== -1) {
+        tasks.value[index] = deletedTask
+        deletedTasks.value.push(deletedTask)
+      }
+      
+      // 重置选中状态
+      selectedTaskIndex.value = -1
+      viewingCompleted.value = false
+      
+      // 显示成功消息
+      ElMessage.success(`任务"${task.name}"已移至回收站`)
     }
-    
-    // 更新本地状态
-    const index = tasks.value.findIndex(t => t.id === task.id)
-    if (index !== -1) {
-      tasks.value[index] = taskToDelete
-      deletedTasks.value.push(taskToDelete)
-    }
-    
-    // 发送删除消息到主进程
-    window.electron.ipcRenderer.send('delete-task', {
-      id: task.id,
-      deletedAt: now
-    })
-    
-    // 重置选中状态
-    selectedTaskIndex.value = -1
-    viewingCompleted.value = false
-    
-    // 显示成功消息
-    ElMessage.success(`任务"${task.name}"已移至回收站`)
     
     // 确保根元素重新获得焦点
     nextTick(() => {
@@ -532,18 +580,23 @@ const handleAddTask = async () => {
     lastTaskAddTime.value = now
     const taskData = {
       name: newTaskName.value.trim(),
-      createdAt: new Date().toISOString()
+      completed: false,
+      description: ''
     }
-    window.electron.ipcRenderer.send('add-task', taskData)
-    newTaskName.value = ''
-    showQuickAdd.value = false
-    ElMessage.success('任务添加成功')
+    
+    const newTask = await window.electron.ipcRenderer.invoke('add-task', taskData)
+    if (newTask) {
+      tasks.value.push(newTask)
+      newTaskName.value = ''
+      showQuickAdd.value = false
+      ElMessage.success('任务添加成功')
+    }
     
     // 重置选中状态
     selectedTaskIndex.value = -1
     viewingCompleted.value = false
     
-    // 确保根元素重新获得焦点，但不自动选中任务
+    // 确保根元素重新获得焦点
     nextTick(() => {
       tasksViewRef.value?.focus()
     })
@@ -613,35 +666,29 @@ const formatDate = (dateString: string) => {
 }
 
 // 修改恢复任务的方法
-const handleRestoreTask = (task: Task) => {
+const handleRestoreTask = async (task: Task) => {
   try {
-    // 创建要恢复的任务对象，保留所有原始数据
-    const taskToRestore = {
-      ...task,
-      deleted: false,
-      deletedAt: null
-    }
+    const restoredTask = await window.electron.ipcRenderer.invoke('restore-task', task.id)
     
-    // 更新本地状态
-    const index = tasks.value.findIndex(t => t.id === task.id)
-    if (index !== -1) {
-      tasks.value[index] = taskToRestore
-      // 从回收站中移除
-      const deletedIndex = deletedTasks.value.findIndex(t => t.id === task.id)
-      if (deletedIndex !== -1) {
-        deletedTasks.value.splice(deletedIndex, 1)
+    if (restoredTask) {
+      // 更新本地状态
+      const index = tasks.value.findIndex(t => t.id === task.id)
+      if (index !== -1) {
+        tasks.value[index] = restoredTask
+        // 从回收站中移除
+        const deletedIndex = deletedTasks.value.findIndex(t => t.id === task.id)
+        if (deletedIndex !== -1) {
+          deletedTasks.value.splice(deletedIndex, 1)
+        }
       }
+      
+      // 重置选中状态
+      selectedDeletedIndex.value = -1
+      selectedDeletedTask.value = null
+      
+      // 显示成功消息
+      ElMessage.success(`任务"${task.name}"已恢复`)
     }
-    
-    // 发送恢复消息到主进程
-    window.electron.ipcRenderer.send('restore-task', taskToRestore)
-    
-    // 重置选中状态
-    selectedDeletedIndex.value = -1
-    selectedDeletedTask.value = null
-    
-    // 显示成功消息
-    ElMessage.success(`任务"${task.name}"已恢复`)
     
     // 确保根元素重新获得焦点
     nextTick(() => {
@@ -652,16 +699,24 @@ const handleRestoreTask = (task: Task) => {
   }
 }
 
-// 显示指定时间范围的任务
-const showRangeTasks = (range: string) => {
+// 显示指定时间范围的任
+const showRangeTasks = async (range: string) => {
   console.log('Showing range tasks:', range)
   currentRange.value = range
   showTaskDashboard.value = true
-  window.electron.ipcRenderer.send('get-range-tasks', range)
+  try {
+    const data = await window.electron.ipcRenderer.invoke('get-range-tasks', range)
+    if (data) {
+      rangeTasks.value = data.tasks || []
+      rangeStats.value = data.stats || { total: 0, completed: 0, pending: 0 }
+    }
+  } catch (error) {
+    handleError(error, 'showRangeTasks')
+  }
 }
 
 // 处理任务说明更新
-const handleUpdateTaskDescription = () => {
+const handleUpdateTaskDescription = async () => {
   if (!currentTask.value) return
   
   try {
@@ -672,18 +727,32 @@ const handleUpdateTaskDescription = () => {
       completed: currentTask.value.completed,
       createdAt: currentTask.value.createdAt
     }
-    window.electron.ipcRenderer.send('update-task', updatedTask)
-    ElMessage.success('任务说明已更新')
+    const result = await window.electron.ipcRenderer.invoke('update-task', updatedTask)
+    if (result) {
+      ElMessage.success('任务说明已更新')
+      handleTaskUpdate(result)
+    }
   } catch (error) {
     handleError(error, 'handleUpdateTaskDescription')
   }
 }
 
 // 处理永久删除任务
-const handleHardDeleteTask = (task: Task) => {
-  window.electron.ipcRenderer.send('hard-delete-task', task.id)
-  selectedDeletedIndex.value = -1
-  selectedDeletedTask.value = null
+const handleHardDeleteTask = async (task: Task) => {
+  try {
+    const result = await window.electron.ipcRenderer.invoke('permanently-delete-task', task.id)
+    if (result) {
+      selectedDeletedIndex.value = -1
+      selectedDeletedTask.value = null
+      const index = deletedTasks.value.findIndex(t => t.id === task.id)
+      if (index !== -1) {
+        deletedTasks.value.splice(index, 1)
+      }
+      ElMessage.success(`任务"${task.name}"已永久删除`)
+    }
+  } catch (error) {
+    handleError(error, 'handleHardDeleteTask')
+  }
 }
 
 // 修改打开任务详情的方法
@@ -711,7 +780,7 @@ const showRecycleBin = () => {
 }
 
 // 处理任务标题更新
-const handleUpdateTaskTitle = () => {
+const handleUpdateTaskTitle = async () => {
   if (!currentTask.value || taskTitle.value === currentTask.value.name) return
   
   try {
@@ -722,8 +791,11 @@ const handleUpdateTaskTitle = () => {
       completed: currentTask.value.completed,
       createdAt: currentTask.value.createdAt
     }
-    window.electron.ipcRenderer.send('update-task', updatedTask)
-    ElMessage.success('任务标题已更新')
+    const result = await window.electron.ipcRenderer.invoke('update-task', updatedTask)
+    if (result) {
+      ElMessage.success('任务标题已更新')
+      handleTaskUpdate(result)
+    }
   } catch (error) {
     handleError(error, 'handleUpdateTaskTitle')
   }
@@ -771,24 +843,26 @@ const selectTask = (index: number, isCompleted: boolean = false) => {
 }
 
 // 更新任务完成状态
-const updateTaskCompletion = (task: Task) => {
+const updateTaskCompletion = async (task: Task) => {
   try {
     const updatedTask = {
       ...task,
       completed: !task.completed
     }
-    window.electron.ipcRenderer.send('update-task', updatedTask)
-    ElMessage.success(`任务"${task.name}"已${updatedTask.completed ? '完成' : '取消完成'}`)
-    
-    // 更新本地任务状态
-    const index = tasks.value.findIndex(t => t.id === task.id)
-    if (index !== -1) {
-      tasks.value[index] = updatedTask
+    const result = await window.electron.ipcRenderer.invoke('update-task', updatedTask)
+    if (result) {
+      ElMessage.success(`任务"${task.name}"已${result.completed ? '完成' : '取消完成'}`)
+      
+      // 更新本地任务状态
+      const index = tasks.value.findIndex(t => t.id === task.id)
+      if (index !== -1) {
+        tasks.value[index] = result
+      }
+      
+      // 重置选中状态
+      selectedTaskIndex.value = -1
+      viewingCompleted.value = false
     }
-    
-    // 重置选中状态
-    selectedTaskIndex.value = -1
-    viewingCompleted.value = false
     
     // 确保根元素重新获得焦点
     nextTick(() => {
@@ -870,8 +944,85 @@ const handleTaskUpdate = (updatedTask: Task) => {
 // 添加根元素引用
 const tasksViewRef = ref<HTMLElement | null>(null)
 
+// 加载配置
+const loadConfig = async () => {
+  try {
+    const result = await window.electron.ipcRenderer.invoke('get-config')
+    configInfo.value = result
+  } catch (error) {
+    console.error('Failed to load config:', error)
+  }
+}
+
+// 选择数据路径
+const handleSelectDataPath = async () => {
+  try {
+    const result = await window.electron.ipcRenderer.invoke('select-data-path')
+    if (result) {
+      configInfo.value = result
+      ElMessage.success('数据存储路径已更新')
+    }
+  } catch (error) {
+    console.error('Failed to select data path:', error)
+    ElMessage.error('选择路径失败')
+  }
+}
+
+// 导出数据
+const handleExportData = () => {
+  ElMessage.info('即将支持数据导出功能')
+}
+
+// 导入数据
+const handleImportData = () => {
+  ElMessage.info('即将支持数据导入功能')
+}
+
+// 清空数据
+const handleClearData = async () => {
+  try {
+    const result = await window.electron.ipcRenderer.invoke('clear-all-data')
+    if (result.success) {
+      // 清空本地状态
+      tasks.value = []
+      todayTasks.value = []
+      weekTasks.value = []
+      monthTasks.value = []
+      quarterTasks.value = []
+      yearTasks.value = []
+      deletedTasks.value = []
+      
+      // 重置选中状态
+      selectedTaskIndex.value = -1
+      selectedDeletedIndex.value = -1
+      selectedDeletedTask.value = null
+      viewingCompleted.value = false
+      
+      // 关闭所有对话框
+      showTaskDashboard.value = false
+      taskDetailVisible.value = false
+      showRecycleBinDialog.value = false
+      showConfigDialog.value = false
+      
+      ElMessage({
+        type: 'success',
+        message: `数据已清空，备份已保存至: ${result.backupPath}`,
+        duration: 5000
+      })
+      
+      // 更新配置信息
+      loadConfig()
+    } else {
+      throw new Error(result.error || '清空数据失败')
+    }
+  } catch (error) {
+    console.error('Failed to clear data:', error)
+    ElMessage.error(error.message || '清空数据失败')
+  }
+}
+
 // 修改 onMounted 钩子
-onMounted(() => {
+onMounted(async () => {
   console.log('Tasks component mounted')
   
   // 确保根元素可以接收键盘事件
@@ -904,7 +1055,14 @@ onMounted(() => {
 
   console.log('Setting up IPC listeners...')
   // 请求初始任务数据
-  window.electron.ipcRenderer.send('get-tasks')
+  try {
+    const initialTasks = await window.electron.ipcRenderer.invoke('get-tasks')
+    if (initialTasks) {
+      tasks.value = initialTasks
+    }
+  } catch (error) {
+    handleError(error, 'initial tasks loading')
+  }
   
   window.electron.ipcRenderer.on('task-updated', (updatedTask: Task) => {
     console.log('Task updated:', updatedTask)
@@ -999,6 +1157,30 @@ watch(taskDetailVisible, (newValue) => {
 })
 
 console.log('Tasks component setup complete')
+
+// 添加配置相关的状态
+const configInfo = ref({
+  dataPath: '',
+  version: '',
+  lastBackup: null
+})
+
+// 显示配置对话框
+const showConfigDialog = ref(false)
+
+// 显示配置
+const showConfig = async () => {
+  try {
+    const result = await window.electron.ipcRenderer.invoke('get-config')
+    if (result) {
+      configInfo.value = result
+      showConfigDialog.value = true
+    }
+  } catch (error) {
+    console.error('Failed to load config:', error)
+    ElMessage.error('加载配置信息失败')
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -1006,7 +1188,7 @@ console.log('Tasks component setup complete')
   padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
-  outline: none; // 添加这行以移除焦点轮廓
+  outline: none; // 添加这行以移除点轮廓
 
   .statistics-cards {
     margin-bottom: 20px;
@@ -1323,6 +1505,32 @@ console.log('Tasks component setup complete')
     .value.danger {
       transform: scale(1.1);
     }
+  }
+}
+
+.value {
+  .el-icon {
+    font-size: 24px;
+    color: var(--el-color-primary);
+  }
+}
+
+.config-container {
+  padding: 20px;
+
+  .path-selector {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+
+    .el-input {
+      flex: 1;
+    }
+  }
+
+  .data-management {
+    display: flex;
+    gap: 12px;
   }
 }
 </style> 

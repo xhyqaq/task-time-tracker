@@ -8,28 +8,29 @@ try {
   
   // 定义允许的 IPC 通道
   const validChannels = [
+    'get-tasks',
+    'get-deleted-tasks',
     'add-task',
     'update-task',
     'delete-task',
     'restore-task',
-    'get-tasks',
-    'get-range-tasks',
-    'task-added',
-    'task-updated',
-    'task-deleted',
-    'task-restored',
-    'tasks-loaded',
-    'tasks-stats-updated',
-    'range-tasks-loaded'
+    'permanently-delete-task',
+    'load-tasks',
+    'get-config',
+    'update-config',
+    'select-data-path',
+    'clear-all-data',
+    'get-range-tasks'
   ]
 
   contextBridge.exposeInMainWorld('electron', {
     ipcRenderer: {
-      send: (channel: string, ...args: any[]) => {
+      invoke: async (channel: string, ...args: any[]) => {
         if (validChannels.includes(channel)) {
-          console.log('IPC Send:', channel, args)
-          ipcRenderer.send(channel, ...args)
+          console.log('IPC Invoke:', channel, args)
+          return await ipcRenderer.invoke(channel, ...args)
         }
+        throw new Error(`Invalid channel: ${channel}`)
       },
       on: (channel: string, func: (...args: any[]) => void) => {
         if (validChannels.includes(channel)) {
@@ -58,5 +59,18 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM Content Loaded in preload')
   console.log('Window electron object:', window.electron)
 })
+
+// 声明全局类型
+declare global {
+  interface Window {
+    electron: {
+      ipcRenderer: {
+        invoke(channel: string, ...args: any[]): Promise<any>
+        on(channel: string, func: (...args: any[]) => void): void
+        removeAllListeners(channel: string): void
+      }
+    }
+  }
+}
 
 console.log('Preload script finished') 

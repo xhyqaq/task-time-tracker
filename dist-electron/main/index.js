@@ -2,6 +2,7 @@
 const electron = require("electron");
 const node_os = require("node:os");
 const node_path = require("node:path");
+const fs = require("fs");
 console.log("Main process starting...");
 process.env.DIST_ELECTRON = node_path.join(__dirname, "..");
 process.env.DIST = node_path.join(process.env.DIST_ELECTRON, "../dist");
@@ -25,6 +26,67 @@ if (!electron.app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 let win = null;
+let tasks = [];
+let config = {
+  dataPath: node_path.join(electron.app.getPath("userData"), "data"),
+  tasksFile: "tasks.json",
+  version: electron.app.getVersion(),
+  lastBackup: null
+};
+const CONFIG_FILE = node_path.join(electron.app.getPath("userData"), "config.json");
+function loadConfig() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const data = fs.readFileSync(CONFIG_FILE, "utf8");
+      config = { ...config, ...JSON.parse(data) };
+    } else {
+      saveConfig();
+    }
+  } catch (error) {
+    console.error("Error loading config:", error);
+  }
+}
+function saveConfig() {
+  try {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), "utf8");
+  } catch (error) {
+    console.error("Error saving config:", error);
+  }
+}
+function ensureDataDirectory() {
+  try {
+    if (!fs.existsSync(config.dataPath)) {
+      fs.mkdirSync(config.dataPath, { recursive: true });
+    }
+  } catch (error) {
+    console.error("Error creating data directory:", error);
+  }
+}
+function loadTasks() {
+  try {
+    ensureDataDirectory();
+    const filePath = node_path.join(config.dataPath, config.tasksFile);
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, "utf-8");
+      const loadedTasks = JSON.parse(data);
+      console.log("Tasks loaded:", loadedTasks);
+      return loadedTasks;
+    }
+  } catch (error) {
+    console.error("Error loading tasks:", error);
+  }
+  return [];
+}
+function saveTasks(tasksToSave) {
+  try {
+    ensureDataDirectory();
+    const filePath = node_path.join(config.dataPath, config.tasksFile);
+    fs.writeFileSync(filePath, JSON.stringify(tasksToSave, null, 2), "utf-8");
+    console.log("Tasks saved:", tasksToSave);
+  } catch (error) {
+    console.error("Error saving tasks:", error);
+  }
+}
 async function createWindow() {
   console.log("Creating main window...");
   win = new electron.BrowserWindow({
@@ -71,7 +133,7 @@ async function createWindow() {
   console.log("DevTools opened");
   win.webContents.on("did-finish-load", () => {
     console.log("Window finished loading");
-    win?.webContents.executeJavaScript('console.log("Window JavaScript context is ready")');
+    win?.webContents.send("load-tasks", tasks);
   });
   win.webContents.on("did-fail-load", (event, errorCode, errorDescription) => {
     console.error("Failed to load:", errorCode, errorDescription);
@@ -87,7 +149,11 @@ async function createWindow() {
   });
 }
 electron.app.whenReady().then(() => {
-  console.log("App is ready");
+  console.log("App is ready, initializing...");
+  loadConfig();
+  ensureDataDirectory();
+  tasks = loadTasks();
+  console.log("Initial tasks loaded:", tasks);
   createWindow();
 });
 electron.app.on("window-all-closed", () => {
@@ -111,54 +177,212 @@ electron.app.on("activate", () => {
     createWindow();
   }
 });
-electron.ipcMain.on("add-task", (event, task) => {
-  console.log("Adding task:", task);
-  event.reply("task-added", task);
+electron.ipcMain.handle("get-tasks", () => {
+  console.log("Getting tasks:", tasks);
+  return tasks.filter((task) => !task.deleted);
 });
-electron.ipcMain.on("update-task", (event, task) => {
-  console.log("Updating task:", task);
-  if (!task.id) {
-    console.error("Task ID is required for update");
-    return;
+electron.ipcMain.handle("get-deleted-tasks", () => {
+  return tasks.filter((task) => task.deleted);
+});
+electron.ipcMain.handle("add-task", (event, task) => {
+  console.log("Adding new task:", task);
+  try {
+    const newTask = {
+      ...task,
+      id: Date.now(),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      deleted: false
+    };
+    tasks.push(newTask);
+    saveTasks(tasks);
+    console.log("Task added successfully:", newTask);
+    win?.webContents.send("tasks-stats-updated", {
+      today: getTodayTasks(),
+      week: getWeekTasks(),
+      month: getMonthTasks(),
+      quarter: getQuarterTasks(),
+      year: getYearTasks(),
+      deleted: getDeletedTasks()
+    });
+    return newTask;
+  } catch (error) {
+    console.error("Error adding task:", error);
+    throw error;
   }
-  event.reply("task-updated", task);
 });
-electron.ipcMain.on("delete-task", (event, taskId) => {
-  console.log("Deleting task:", taskId);
-  if (!taskId) {
-    console.error("Task ID is required for deletion");
-    return;
+electron.ipcMain.handle("update-task", (event, updatedTask) => {
+  const index = tasks.findIndex((t) => t.id === updatedTask.id);
+  if (index !== -1) {
+    tasks[index] = {
+      ...tasks[index],
+      ...updatedTask,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    saveTasks(tasks);
+    return tasks[index];
   }
-  event.reply("task-deleted", { id: taskId, deleted: true });
+  return null;
 });
-electron.ipcMain.on("restore-task", (event, taskId) => {
-  console.log("Restoring task:", taskId);
-  if (!taskId) {
-    console.error("Task ID is required for restoration");
-    return;
+electron.ipcMain.handle("delete-task", (event, taskId) => {
+  const index = tasks.findIndex((t) => t.id === taskId);
+  if (index !== -1) {
+    tasks[index] = {
+      ...tasks[index],
+      deleted: true,
+      deletedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    saveTasks(tasks);
+    return tasks[index];
   }
-  event.reply("task-restored", { id: taskId, deleted: false });
+  return null;
 });
-electron.ipcMain.on("get-tasks", (event) => {
-  console.log("Getting tasks");
-  event.reply("tasks-loaded", {
-    all: [],
-    deleted: [],
-    today: [],
-    week: [],
-    month: [],
-    quarter: [],
-    year: []
+electron.ipcMain.handle("restore-task", (event, taskId) => {
+  const index = tasks.findIndex((t) => t.id === taskId);
+  if (index !== -1) {
+    tasks[index] = {
+      ...tasks[index],
+      deleted: false,
+      deletedAt: null,
+      restoredAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    saveTasks(tasks);
+    return tasks[index];
+  }
+  return null;
+});
+electron.ipcMain.handle("permanently-delete-task", (event, taskId) => {
+  const index = tasks.findIndex((t) => t.id === taskId);
+  if (index !== -1) {
+    tasks.splice(index, 1);
+    saveTasks(tasks);
+    return true;
+  }
+  return false;
+});
+electron.ipcMain.handle("get-config", () => {
+  return config;
+});
+electron.ipcMain.handle("update-config", (event, newConfig) => {
+  config = { ...config, ...newConfig };
+  saveConfig();
+  return config;
+});
+electron.ipcMain.handle("select-data-path", async () => {
+  const result = await electron.dialog.showOpenDialog({
+    properties: ["openDirectory"]
   });
+  if (!result.canceled && result.filePaths.length > 0) {
+    config.dataPath = result.filePaths[0];
+    saveConfig();
+    return config;
+  }
+  return null;
 });
-electron.ipcMain.on("get-range-tasks", (event, range) => {
-  console.log("Getting range tasks:", range);
-  event.reply("range-tasks-loaded", {
-    tasks: [],
+electron.ipcMain.handle("clear-all-data", async () => {
+  try {
+    console.log("Clearing all data...");
+    console.log("Current tasks:", tasks);
+    const backupPath = node_path.join(config.dataPath, `backup_${Date.now()}.json`);
+    fs.writeFileSync(backupPath, JSON.stringify(tasks, null, 2), "utf-8");
+    console.log("Backup created at:", backupPath);
+    tasks = [];
+    saveTasks(tasks);
+    console.log("Tasks cleared and saved");
+    config.lastBackup = (/* @__PURE__ */ new Date()).toISOString();
+    saveConfig();
+    console.log("Config updated");
+    win?.webContents.send("tasks-stats-updated", {
+      today: [],
+      week: [],
+      month: [],
+      quarter: [],
+      year: [],
+      deleted: []
+    });
+    console.log("Renderer process notified");
+    return {
+      success: true,
+      backupPath
+    };
+  } catch (error) {
+    console.error("Failed to clear data:", error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+function isToday(date, today) {
+  return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+}
+function isThisWeek(date, today) {
+  const todayWeek = today.getDate() - today.getDay();
+  const dateWeek = date.getDate() - date.getDay();
+  return todayWeek === dateWeek && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+}
+function isThisMonth(date, today) {
+  return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+}
+function isThisQuarter(date, today) {
+  const quarter = Math.floor(today.getMonth() / 3);
+  const dateQuarter = Math.floor(date.getMonth() / 3);
+  return quarter === dateQuarter && date.getFullYear() === today.getFullYear();
+}
+function isThisYear(date, today) {
+  return date.getFullYear() === today.getFullYear();
+}
+function getTodayTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isToday(new Date(t.createdAt), today));
+}
+function getWeekTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isThisWeek(new Date(t.createdAt), today));
+}
+function getMonthTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isThisMonth(new Date(t.createdAt), today));
+}
+function getQuarterTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isThisQuarter(new Date(t.createdAt), today));
+}
+function getYearTasks() {
+  const today = /* @__PURE__ */ new Date();
+  return tasks.filter((t) => !t.deleted && isThisYear(new Date(t.createdAt), today));
+}
+function getDeletedTasks() {
+  return tasks.filter((t) => t.deleted);
+}
+electron.ipcMain.handle("get-range-tasks", (event, range) => {
+  const today = /* @__PURE__ */ new Date();
+  const allTasks = tasks.filter((t) => !t.deleted);
+  let rangeTasks = [];
+  switch (range) {
+    case "today":
+      rangeTasks = allTasks.filter((t) => isToday(new Date(t.createdAt), today));
+      break;
+    case "week":
+      rangeTasks = allTasks.filter((t) => isThisWeek(new Date(t.createdAt), today));
+      break;
+    case "month":
+      rangeTasks = allTasks.filter((t) => isThisMonth(new Date(t.createdAt), today));
+      break;
+    case "quarter":
+      rangeTasks = allTasks.filter((t) => isThisQuarter(new Date(t.createdAt), today));
+      break;
+    case "year":
+      rangeTasks = allTasks.filter((t) => isThisYear(new Date(t.createdAt), today));
+      break;
+    default:
+      rangeTasks = allTasks;
+  }
+  return {
+    tasks: rangeTasks,
     stats: {
-      total: 0,
-      completed: 0,
-      pending: 0
+      total: rangeTasks.length,
+      completed: rangeTasks.filter((t) => t.completed).length,
+      pending: rangeTasks.filter((t) => !t.completed).length
     }
-  });
+  };
 });

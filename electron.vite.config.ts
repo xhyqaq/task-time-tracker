@@ -27,26 +27,19 @@ export default defineConfig({
   },
   renderer: {
     root: '.',
-    base: process.env.ELECTRON_RENDERER_URL || './',
+    build: {
+      outDir: 'dist',
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'index.html')
+        }
+      }
+    },
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src')
       }
     },
-    plugins: [vue()],
-    build: {
-      outDir: 'dist',
-      assetsDir: '.',
-      rollupOptions: {
-        input: {
-          main: resolve(__dirname, 'index.html')
-        }
-      }
-    },
-    server: {
-      port: 5173,
-      strictPort: true,
-      hmr: true
-    }
+    plugins: [vue()]
   }
 }) 

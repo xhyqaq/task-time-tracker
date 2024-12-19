@@ -8,9 +8,48 @@
       </template>
 
       <el-form label-width="120px">
+        <!-- 数据管理 -->
+        <el-form-item label="数据管理">
+          <div class="data-management">
+            <div class="data-path">
+              <span class="label">数据存储路径：</span>
+              <el-input
+                v-model="dataPath"
+                readonly
+                placeholder="点击选择按钮设置数据存储路径"
+              >
+                <template #append>
+                  <el-button @click="handleSelectDataPath">
+                    选择路径
+                  </el-button>
+                </template>
+              </el-input>
+            </div>
+            <div class="data-actions">
+              <el-button type="primary" @click="handleExportData">
+                导出数据
+              </el-button>
+              <el-button type="warning" @click="handleImportData">
+                导入数据
+              </el-button>
+              <el-popconfirm
+                title="确定要清空所有数据吗？此操作不可恢复！"
+                @confirm="handleClearData"
+              >
+                <template #reference>
+                  <el-button type="danger">清空数据</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
+          </div>
+        </el-form-item>
+
         <!-- 快捷键设置 -->
         <el-form-item label="快捷键">
           <el-descriptions :column="1" border>
+            <el-descriptions-item label="快速添加任务">
+              <el-tag>Command + I</el-tag>
+            </el-descriptions-item>
             <el-descriptions-item label="选择任务">
               <el-tag>Command + 数字键(1-9)</el-tag>
             </el-descriptions-item>
@@ -24,9 +63,9 @@
               <el-tag>Delete/Backspace</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="查看任务详情">
-              <el-tag>Command + D</el-tag>
+              <el-tag>双击任务</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="恢复已删除任��">
+            <el-descriptions-item label="恢复已删除任务">
               <el-tag>R</el-tag>
               <span class="description">（在回收站中）</span>
             </el-descriptions-item>
@@ -34,23 +73,10 @@
               <el-tag type="danger">Enter</el-tag>
               <span class="description">（在回收站中）</span>
             </el-descriptions-item>
-            <el-descriptions-item label="关闭回收站">
+            <el-descriptions-item label="关闭对话框">
               <el-tag>ESC</el-tag>
             </el-descriptions-item>
           </el-descriptions>
-        </el-form-item>
-
-        <!-- 数据管理 -->
-        <el-form-item label="数据管理">
-          <el-button type="primary" @click="handleExportData">
-            导出数据
-          </el-button>
-          <el-button type="warning" @click="handleImportData">
-            导入数据
-          </el-button>
-          <el-button type="danger" @click="handleClearData">
-            清空数据
-          </el-button>
         </el-form-item>
 
         <!-- 关于 -->
@@ -67,40 +93,77 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessageBox } from 'element-plus'
+import { ref, onMounted } from 'vue'
+import { ElMessageBox, ElMessage } from 'element-plus'
+
+// 数据路径
+const dataPath = ref('')
+
+// 获取配置
+const getConfig = async () => {
+  try {
+    const config = await window.electron.ipcRenderer.invoke('get-config')
+    dataPath.value = config.dataPath
+  } catch (error) {
+    console.error('Failed to get config:', error)
+    ElMessage.error('获取配置失败')
+  }
+}
+
+// 选择数据路径
+const handleSelectDataPath = async () => {
+  try {
+    const result = await window.electron.ipcRenderer.invoke('select-data-path')
+    if (result) {
+      dataPath.value = result.dataPath
+      ElMessage.success('数据存储路径已更新')
+    }
+  } catch (error) {
+    console.error('Failed to select data path:', error)
+    ElMessage.error('选择路径失败')
+  }
+}
 
 // 导出数据
 const handleExportData = () => {
-  // TODO: 实现数据导出功能
   ElMessageBox.alert('即将支持数据导出功能', '功能开发中')
 }
 
 // 导入数据
 const handleImportData = () => {
-  // TODO: 实现数据导入功能
   ElMessageBox.alert('即将支持数据导入功能', '功能开发中')
 }
 
 // 清空数据
-const handleClearData = () => {
-  ElMessageBox.confirm(
-    '此操作将清空所有数据，包括任务记录和统计信息，是否继续？',
-    '警告',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
+const handleClearData = async () => {
+  try {
+    const result = await window.electron.ipcRenderer.invoke('clear-all-data')
+    if (result.success) {
+      ElMessage({
+        type: 'success',
+        message: `数据已清空，备份已保存至: ${result.backupPath}`,
+        duration: 5000
+      })
+      
+      // 更新配置信息
+      getConfig()
+    } else {
+      throw new Error(result.error || '清空数据失败')
     }
-  ).then(() => {
-    // TODO: 实现数据清空功能
-    ElMessageBox.alert('即将支持数据清空功能', '功能开发中')
-  }).catch(() => {})
+  } catch (error) {
+    console.error('Failed to clear data:', error)
+    ElMessage.error(error.message || '清空数据失败')
+  }
 }
+
+// 组件挂载时获取配置
+onMounted(() => {
+  getConfig()
+})
 </script>
 
 <style lang="scss" scoped>
 .settings-view {
-  padding: 20px;
   max-width: 800px;
   margin: 0 auto;
 
@@ -117,6 +180,32 @@ const handleClearData = () => {
   .el-form {
     max-width: 600px;
     margin: 0 auto;
+  }
+
+  .data-management {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .data-path {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .label {
+        white-space: nowrap;
+        color: var(--el-text-color-regular);
+      }
+
+      .el-input {
+        flex: 1;
+      }
+    }
+
+    .data-actions {
+      display: flex;
+      gap: 12px;
+    }
   }
 
   .el-descriptions {

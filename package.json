@@ -4,8 +4,9 @@
   "description": "A modern task management and time tracking application",
   "main": "dist-electron/main/index.js",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development electron-vite dev --watch",
+    "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "preview": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps",
     "build:win": "npm run build && electron-builder --win --config",
     "build:mac": "npm run build && electron-builder --mac --config",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.10",
+    "@types/vue-router": "^2.0.0",
     "@vitejs/plugin-vue": "^5.0.3",
     "cross-env": "^7.0.3",
     "electron": "^28.1.4",
