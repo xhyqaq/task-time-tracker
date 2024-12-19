@@ -209,7 +209,7 @@
           <el-col :span="8">
             <el-card shadow="hover">
               <div class="statistic-item">
-                <div class="title">待处理</div>
+                <div class="title">���处理</div>
                 <div class="value warning">{{ rangeStats.pending }}</div>
               </div>
             </el-card>
@@ -285,7 +285,7 @@
       </div>
     </el-dialog>
 
-    <!-- 回收站对话框 -->
+    <!-- 回收站对���框 -->
     <el-dialog
       v-model="showRecycleBinDialog"
       title="回收站"
@@ -468,6 +468,9 @@ const deleteTask = async (task: Task) => {
       
       // 显示成功消息
       ElMessage.success(`任务"${task.name}"已移至回收站`)
+      
+      // 更新时间维度任务数量
+      await initializeTaskStats()
     }
     
     // 确保根元素重新获得焦点
@@ -578,6 +581,9 @@ const handleAddTask = async () => {
       newTaskName.value = ''
       showQuickAdd.value = false
       ElMessage.success('任务添加成功')
+      
+      // 更新时间维度任务数量
+      await initializeTaskStats()
     }
     
     // 重置选中状态
@@ -676,6 +682,9 @@ const handleRestoreTask = async (task: Task) => {
       
       // 显示成功消息
       ElMessage.success(`任务"${task.name}"已恢复`)
+      
+      // 更新时间维度任务数量
+      await initializeTaskStats()
     }
     
     // 确保根元素重新获得焦点
@@ -725,7 +734,7 @@ const handleUpdateTaskDescription = async () => {
   }
 }
 
-// 处理永久删除任务
+// 处理���久删除任务
 const handleHardDeleteTask = async (task: Task) => {
   try {
     const result = await window.electron.ipcRenderer.invoke('permanently-delete-task', task.id)
@@ -850,6 +859,9 @@ const updateTaskCompletion = async (task: Task) => {
       // 重置选中状态
       selectedTaskIndex.value = -1
       viewingCompleted.value = false
+      
+      // 更新时间维度任务数量
+      await initializeTaskStats()
     }
     
     // 确保根元素重新获得焦点
@@ -861,7 +873,7 @@ const updateTaskCompletion = async (task: Task) => {
   }
 }
 
-// 初始��快捷键
+// 初始快捷键
 const keyboardState = computed(() => ({
   selectedTaskIndex: selectedTaskIndex.value,
   selectedDeletedIndex: selectedDeletedIndex.value,
@@ -963,7 +975,7 @@ const handleExportData = () => {
 
 // 导入数据
 const handleImportData = () => {
-  ElMessage.info('即将支持数据��入功能')
+  ElMessage.info('即将支持数据导入功能')
 }
 
 // 清空数据
@@ -1012,7 +1024,7 @@ const handleClearData = async () => {
 // 添加初始化任务统计的方法
 const initializeTaskStats = async () => {
   try {
-    // 加载各时间维度��任务
+    // 加载各时间维度的任务
     const ranges = ['today', 'week', 'month', 'quarter', 'year']
     for (const range of ranges) {
       const result = await window.electron.ipcRenderer.invoke('get-range-tasks', range)
