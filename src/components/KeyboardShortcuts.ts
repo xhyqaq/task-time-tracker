@@ -30,6 +30,7 @@ interface Actions {
   selectTask: (index: number, isCompleted: boolean) => void
   updateTaskCompletion: (task: Task) => void
   deleteTask: (task: Task) => void
+  openTaskDetail: (task: Task) => void
 }
 
 export function useKeyboardShortcuts(
@@ -40,6 +41,19 @@ export function useKeyboardShortcuts(
   const handleKeydown = (e: KeyboardEvent) => {
     // 如果在特殊状态下，不处理快捷键
     if (state.value.showQuickAdd || state.value.taskDetailVisible || state.value.showTaskDashboard) {
+      return
+    }
+
+    // Command + D 查看任务详情
+    if (e.metaKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault()
+      if (state.value.selectedTaskIndex !== -1) {
+        const currentList = state.value.viewingCompleted ? lists.value.completedTasks : lists.value.pendingTasks
+        const selectedTask = currentList[state.value.selectedTaskIndex]
+        if (selectedTask) {
+          actions.openTaskDetail(selectedTask)
+        }
+      }
       return
     }
 

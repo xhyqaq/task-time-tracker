@@ -63,6 +63,10 @@
               <el-tag>Delete/Backspace</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="查看任务详情">
+              <el-tag>Command + D</el-tag>
+              <span class="description">（选中任务后）</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="查看任务详情">
               <el-tag>双击任务</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="恢复已删除任务">

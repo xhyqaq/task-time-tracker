@@ -450,7 +450,7 @@ interface RangeType {
   [key: string]: string
 }
 
-// 关闭回收站
+// ��闭回收站
 const closeRecycleBin = () => {
   showRecycleBinDialog.value = false
 }
@@ -828,7 +828,7 @@ const selectDeletedTask = (task: Task, index: number) => {
   viewingCompleted.value = false
 }
 
-// 修改 watch 函数，重置所有选中状态
+// 修改 watch 函数���重置所有选中状态
 watch(showRecycleBinDialog, (newValue) => {
   console.log('Recycle bin dialog state changed:', newValue)
   if (!newValue) {
@@ -869,7 +869,7 @@ const updateTaskCompletion = async (task: Task) => {
     }
     const result = await window.electron.ipcRenderer.invoke('update-task', updatedTask)
     if (result) {
-      ElMessage.success(`任务"${task.name}"已${result.completed ? '完成' : '取消完成'}`)
+      ElMessage.success(`任务"${task.name}"已${result.completed ? '完成' : '取消��成'}`)
       
       // 更新本地任务状态
       const index = tasks.value.findIndex(t => t.id === task.id)
@@ -1307,7 +1307,7 @@ const showConfig = async () => {
   }
 }
 
-// 添加更新任务统计的辅助函数
+// 添加更新任务统计���辅助函数
 const updateTaskStats = (stats: any) => {
   console.log('Updating task stats:', stats)
   if (stats.today) todayTasks.value = stats.today
