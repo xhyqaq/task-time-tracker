@@ -209,7 +209,7 @@
           <el-col :span="8">
             <el-card shadow="hover">
               <div class="statistic-item">
-                <div class="title">���处理</div>
+                <div class="title">待处理</div>
                 <div class="value warning">{{ rangeStats.pending }}</div>
               </div>
             </el-card>
@@ -285,7 +285,7 @@
       </div>
     </el-dialog>
 
-    <!-- 回收站对���框 -->
+    <!-- 回收站对话框 -->
     <el-dialog
       v-model="showRecycleBinDialog"
       title="回收站"
@@ -511,6 +511,14 @@ const viewingRecycleBin = ref(false)
 const selectedDeletedTask = ref<Task | null>(null)
 const selectedDeletedIndex = ref(-1)
 
+// 添加日期辅助函数
+const isToday = (date: Date) => {
+  const today = new Date()
+  return date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+}
+
 // 计算属
 const pendingTasks = computed(() => 
   tasks.value
@@ -520,7 +528,11 @@ const pendingTasks = computed(() =>
 
 const completedTasks = computed(() => 
   tasks.value
-    .filter(task => task.completed && !task.deleted)
+    .filter(task => {
+      if (!task.completed || task.deleted) return false
+      const taskDate = new Date(task.createdAt)
+      return isToday(taskDate)
+    })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 )
 
@@ -849,7 +861,7 @@ const updateTaskCompletion = async (task: Task) => {
   }
 }
 
-// 初始化快捷键
+// 初始��快捷键
 const keyboardState = computed(() => ({
   selectedTaskIndex: selectedTaskIndex.value,
   selectedDeletedIndex: selectedDeletedIndex.value,
@@ -951,7 +963,7 @@ const handleExportData = () => {
 
 // 导入数据
 const handleImportData = () => {
-  ElMessage.info('即将支持数据导入功能')
+  ElMessage.info('即将支持数据��入功能')
 }
 
 // 清空数据
@@ -1000,7 +1012,7 @@ const handleClearData = async () => {
 // 添加初始化任务统计的方法
 const initializeTaskStats = async () => {
   try {
-    // 加载各时间维度的任务
+    // 加载各时间维度��任务
     const ranges = ['today', 'week', 'month', 'quarter', 'year']
     for (const range of ranges) {
       const result = await window.electron.ipcRenderer.invoke('get-range-tasks', range)
