@@ -264,12 +264,17 @@
       @keydown.stop
       @keydown.esc="taskDetailVisible = false"
     >
-      <div class="task-detail" v-if="currentTask">
+      <div 
+        class="task-detail" 
+        v-if="currentTask" 
+        tabindex="0" 
+        @keydown.meta.s.prevent="handleSaveTask"
+        @keydown.ctrl.s.prevent="handleSaveTask"
+      >
         <div class="task-title">
           <el-input
             v-model="taskTitle"
             placeholder="任务标题"
-            @keydown.enter="handleUpdateTaskTitle"
             @keydown.stop
           />
         </div>
@@ -280,7 +285,6 @@
             type="textarea"
             :rows="4"
             placeholder="添加任务说明..."
-            @keydown.enter="handleUpdateTaskDescription"
             @keydown.stop
           />
         </div>
@@ -293,6 +297,14 @@
           </p>
         </div>
       </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="taskDetailVisible = false">关闭</el-button>
+          <el-button type="primary" @click="handleSaveTask">
+            保存更改
+          </el-button>
+        </div>
+      </template>
     </el-dialog>
 
     <!-- 回收站对话框 -->
@@ -392,10 +404,10 @@
                 导出数据
               </el-button>
               <el-button type="warning" @click="handleImportData">
-                导入数据
+                导入数���
               </el-button>
               <el-popconfirm
-                title="确定要清空所有数据吗？此操作不可恢复！"
+                title="确定要清空所有数据吗？此操作不可恢复"
                 @confirm="handleClearData"
               >
                 <template #reference>
@@ -431,6 +443,7 @@ declare global {
   }
 }
 
+// 更新 Task 接口定义
 interface Task {
   id: number
   name: string
@@ -450,7 +463,7 @@ interface RangeType {
   [key: string]: string
 }
 
-// ��闭回收站
+// 闭回收站
 const closeRecycleBin = () => {
   showRecycleBinDialog.value = false
 }
@@ -492,6 +505,7 @@ const deleteTask = async (task: Task) => {
   }
 }
 
+// 定义响应式变量的类型
 const tasks = ref<Task[]>([])
 const todayTasks = ref<Task[]>([])
 const weekTasks = ref<Task[]>([])
@@ -523,6 +537,7 @@ const showRecycleBinDialog = ref(false)
 const viewingRecycleBin = ref(false)
 const selectedDeletedTask = ref<Task | null>(null)
 const selectedDeletedIndex = ref(-1)
+const autoSaveTimer = ref<number | null>(null)
 
 // 添加日期辅助函数
 const isToday = (date: Date) => {
@@ -565,10 +580,16 @@ const dashboardTitle = computed(() => {
   return titles[currentRange.value] || '任务仪表盘'
 })
 
-// 添加错误处理函数
-const handleError = (error: any, context: string) => {
+// 修改错误处理函数
+const handleError = (error: unknown, context: string) => {
   console.error(`Error in ${context}:`, error)
-  ElMessage.error(`操作失败: ${error.message || '未知错误'}`)
+  if (error instanceof Error) {
+    ElMessage.error(error.message)
+  } else if (typeof error === 'string') {
+    ElMessage.error(error)
+  } else {
+    ElMessage.error('操作失败')
+  }
 }
 
 // 修改处理任务添加的方法
@@ -614,11 +635,11 @@ const handleAddTask = async () => {
 // 修改处理对话框打开的方法
 const handleDialogOpen = () => {
   console.log('Dialog opened')
-  // 使用多个 nextTick 确保在 DOM 完全更新后再聚焦
+  // 使用个 nextTick 确保在 DOM 完全更新后再聚焦
   nextTick(() => {
     nextTick(() => {
       if (taskInput.value) {
-        // 尝试多种方式获取和聚焦输入框
+        // 尝试多方式获取和聚焦输入框
         const input = taskInput.value.$el.querySelector('input') || taskInput.value.input || taskInput.value
         if (input && typeof input.focus === 'function') {
           input.focus()
@@ -717,7 +738,7 @@ const handleRestoreTask = async (task: Task) => {
   }
 }
 
-// 显示指定时间范围的任
+// 显示指定时间范围的任务
 const showRangeTasks = async (range: string) => {
   console.log('Showing range tasks:', range)
   currentRange.value = range
@@ -733,29 +754,86 @@ const showRangeTasks = async (range: string) => {
   }
 }
 
-// 处理任务说明更新
-const handleUpdateTaskDescription = async () => {
-  if (!currentTask.value) return
+// 修改类型守卫函数
+function isTask(value: unknown): value is Task {
+  if (!value || typeof value !== 'object') return false
+  const task = value as Partial<Task>
+  return (
+    typeof task.id === 'number' &&
+    typeof task.name === 'string' &&
+    typeof task.completed === 'boolean' &&
+    typeof task.createdAt === 'string'
+  )
+}
+
+// 修改任务更新处理函数
+const handleTaskUpdate = (updatedTask: unknown) => {
+  if (!isTask(updatedTask)) return
+
+  // 更新任务列表中的任务
+  const index = tasks.value.findIndex(t => t.id === updatedTask.id)
+  if (index !== -1) {
+    tasks.value[index] = { ...updatedTask }
+  }
   
-  try {
-    const updatedTask = {
-      id: currentTask.value.id,
-      name: currentTask.value.name,
-      description: taskDescription.value,
-      completed: currentTask.value.completed,
-      createdAt: currentTask.value.createdAt
-    }
-    const result = await window.electron.ipcRenderer.invoke('update-task', updatedTask)
-    if (result) {
-      ElMessage.success('任务说明已更新')
-      handleTaskUpdate(result)
-    }
-  } catch (error) {
-    handleError(error, 'handleUpdateTaskDescription')
+  // 如果当前正在查看这个任务的详情，也更新详情视图
+  if (currentTask.value && currentTask.value.id === updatedTask.id) {
+    currentTask.value = { ...updatedTask }
   }
 }
 
-// 处理久删除任务
+// 修改保存任务函数（统一保存标题和描述）
+const handleSaveTask = async () => {
+  if (!currentTask.value || !isTask(currentTask.value)) return
+  
+  try {
+    const updatedTask: Task = {
+      ...currentTask.value,
+      name: taskTitle.value,
+      description: taskDescription.value
+    }
+    
+    const result = await window.electron.ipcRenderer.invoke('update-task', updatedTask)
+    if (isTask(result)) {
+      ElMessage.success('任务已保存')
+      handleTaskUpdate(result)
+    }
+  } catch (error) {
+    handleError(error, 'handleSaveTask')
+  }
+}
+
+// 修改自动保存函数
+const handleAutoSave = () => {
+  if (!currentTask.value || !isTask(currentTask.value) || !taskDetailVisible.value) return
+  
+  const updatedTask: Task = {
+    ...currentTask.value,
+    name: taskTitle.value,
+    description: taskDescription.value
+  }
+  
+  window.electron.ipcRenderer.invoke('update-task', updatedTask)
+    .then((result) => {
+      if (isTask(result)) {
+        handleTaskUpdate(result)
+      }
+    })
+    .catch((error) => {
+      console.error('自动保存失败:', error)
+    })
+}
+
+// 修改打开任务详情的方法
+const openTaskDetail = (task: unknown) => {
+  if (!isTask(task)) return
+  currentTask.value = { ...task }
+  taskTitle.value = task.name
+  taskDescription.value = task.description || ''
+  taskDetailVisible.value = true
+}
+
+// 处理删除任务
 const handleHardDeleteTask = async (task: Task) => {
   try {
     const result = await window.electron.ipcRenderer.invoke('permanently-delete-task', task.id)
@@ -773,50 +851,12 @@ const handleHardDeleteTask = async (task: Task) => {
   }
 }
 
-// 修改打开任务详情的方法
-const openTaskDetail = (task: Task) => {
-  console.log('Opening task detail:', task)
-  try {
-    if (!task) {
-      throw new Error('无效的任务数据')
-    }
-    currentTask.value = { ...task }
-    taskTitle.value = task.name
-    taskDescription.value = task.description || ''
-    taskDetailVisible.value = true
-  } catch (error) {
-    handleError(error, 'openTaskDetail')
-  }
-}
-
 // 显示回收站
 const showRecycleBin = () => {
   console.log('Showing recycle bin')
   showRecycleBinDialog.value = true
   viewingRecycleBin.value = true
   selectedTaskIndex.value = -1
-}
-
-// 处理任务标题更新
-const handleUpdateTaskTitle = async () => {
-  if (!currentTask.value || taskTitle.value === currentTask.value.name) return
-  
-  try {
-    const updatedTask = {
-      id: currentTask.value.id,
-      name: taskTitle.value,
-      description: currentTask.value.description,
-      completed: currentTask.value.completed,
-      createdAt: currentTask.value.createdAt
-    }
-    const result = await window.electron.ipcRenderer.invoke('update-task', updatedTask)
-    if (result) {
-      ElMessage.success('任务标题已更新')
-      handleTaskUpdate(result)
-    }
-  } catch (error) {
-    handleError(error, 'handleUpdateTaskTitle')
-  }
 }
 
 // 选择已删除的任务
@@ -828,7 +868,7 @@ const selectDeletedTask = (task: Task, index: number) => {
   viewingCompleted.value = false
 }
 
-// 修改 watch 函数���重置所有选中状态
+// 修改 watch 函数重置所有选中状态
 watch(showRecycleBinDialog, (newValue) => {
   console.log('Recycle bin dialog state changed:', newValue)
   if (!newValue) {
@@ -869,7 +909,7 @@ const updateTaskCompletion = async (task: Task) => {
     }
     const result = await window.electron.ipcRenderer.invoke('update-task', updatedTask)
     if (result) {
-      ElMessage.success(`任务"${task.name}"已${result.completed ? '完成' : '取消��成'}`)
+      ElMessage.success(`任务"${task.name}"已${result.completed ? '完成' : '取消完成'}`)
       
       // 更新本地任务状态
       const index = tasks.value.findIndex(t => t.id === task.id)
@@ -927,40 +967,6 @@ const { handleKeydown: handleKeyboardShortcuts } = useKeyboardShortcuts(
   taskLists,
   keyboardActions
 )
-
-// 处理任务更新
-const handleTaskUpdate = (updatedTask: Task) => {
-  try {
-    console.log('Handling task update:', updatedTask)
-    const index = tasks.value.findIndex(t => t.id === updatedTask.id)
-    if (index === -1) {
-      throw new Error('任务不存在')
-    }
-    
-    // 更新任务列表中的任务
-    tasks.value[index] = {
-      ...tasks.value[index],
-      ...updatedTask
-    }
-    
-    // 如果当前正在查看这个任务的详情，也更新详情视图
-    if (currentTask.value && currentTask.value.id === updatedTask.id) {
-      currentTask.value = {
-        ...currentTask.value,
-        ...updatedTask
-      }
-      taskTitle.value = updatedTask.name
-      taskDescription.value = updatedTask.description || ''
-    }
-    
-    // 确保根元素重新获得焦点
-    nextTick(() => {
-      tasksViewRef.value?.focus()
-    })
-  } catch (error) {
-    handleError(error, 'handleTaskUpdate')
-  }
-}
 
 // 添加根元素引用
 const tasksViewRef = ref<HTMLElement | null>(null)
@@ -1264,25 +1270,6 @@ onMounted(async () => {
   })
 })
 
-// 添加 watch 以确保焦点
-watch(showQuickAdd, (newValue) => {
-  if (!newValue && tasksViewRef.value) {
-    nextTick(() => {
-      tasksViewRef.value?.focus()
-    })
-  }
-})
-
-watch(taskDetailVisible, (newValue) => {
-  if (!newValue && tasksViewRef.value) {
-    nextTick(() => {
-      tasksViewRef.value?.focus()
-    })
-  }
-})
-
-console.log('Tasks component setup complete')
-
 // 加配置相关的状态
 const configInfo = ref({
   dataPath: '',
@@ -1307,7 +1294,7 @@ const showConfig = async () => {
   }
 }
 
-// 添加更新任务统计���辅助函数
+// 添加更新任务统计辅助函数
 const updateTaskStats = (stats: any) => {
   console.log('Updating task stats:', stats)
   if (stats.today) todayTasks.value = stats.today
@@ -1317,6 +1304,20 @@ const updateTaskStats = (stats: any) => {
   if (stats.year) yearTasks.value = stats.year
   if (stats.deleted) deletedTasks.value = stats.deleted
 }
+
+// 监听对话框显示状态
+watch(taskDetailVisible, (newVal) => {
+  if (newVal) {
+    // 对话框打开时，启动自动保存定时器
+    autoSaveTimer.value = window.setInterval(handleAutoSave, 3000)
+  } else {
+    // 对话框关闭时，清除定时器
+    if (autoSaveTimer.value) {
+      clearInterval(autoSaveTimer.value)
+      autoSaveTimer.value = null
+    }
+  }
+})
 </script>
 
 <style lang="scss" scoped>
@@ -1337,7 +1338,7 @@ const updateTaskStats = (stats: any) => {
       .title {
         color: var(--el-text-color-secondary);
         font-size: 14px;
-        margin-bottom: 12px;  // 增加标题和数值的间距
+        margin-bottom: 12px;  // 增加标题和数值间距
         font-weight: 500;  // 加粗标题
       }
 
