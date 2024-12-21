@@ -110,6 +110,14 @@
                   <span class="task-index">{{ index + 1 }}</span>
                   <span class="task-name">{{ task.name }}</span>
                   <el-tag v-if="task.description" size="small" type="success">额外说明</el-tag>
+                  <el-tag 
+                    v-if="!isToday(new Date(task.createdAt))" 
+                    size="small" 
+                    type="warning"
+                    effect="dark"
+                  >
+                    {{ getTaskTimeLabel(task.createdAt) }}
+                  </el-tag>
                 </div>
                 <div class="task-actions">
                   <el-tag type="warning" size="small" class="status-tag">进行中</el-tag>
@@ -289,12 +297,25 @@
           />
         </div>
         <div class="task-meta">
-          <p>创建时间：{{ formatDate(currentTask.createdAt) }}</p>
-          <p>状态：
+          <div class="meta-item">
+            <span class="meta-label">创建时间：</span>
+            <span class="meta-value">{{ formatDate(currentTask.createdAt) }}</span>
+            <el-tag 
+              v-if="!isToday(new Date(currentTask.createdAt))" 
+              size="small" 
+              type="warning"
+              effect="dark"
+              class="time-tag"
+            >
+              {{ getTaskTimeLabel(currentTask.createdAt) }}
+            </el-tag>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">状态：</span>
             <el-tag :type="currentTask.completed ? 'success' : 'warning'">
               {{ currentTask.completed ? '已完成' : '进行中' }}
             </el-tag>
-          </p>
+          </div>
         </div>
       </div>
       <template #footer>
@@ -328,7 +349,7 @@
                   恢复选中任务
                 </el-button>
                 <el-button type="danger" size="small" :disabled="!selectedDeletedTask" @click="handleHardDeleteTask(selectedDeletedTask)">
-                  永久删除
+                  永久��除
                 </el-button>
               </div>
             </div>
@@ -404,7 +425,7 @@
                 导出数据
               </el-button>
               <el-button type="warning" @click="handleImportData">
-                导入数���
+                导入数据
               </el-button>
               <el-popconfirm
                 title="确定要清空所有数据吗？此操作不可恢复"
@@ -548,11 +569,23 @@ const isToday = (date: Date) => {
 }
 
 // 计算属
-const pendingTasks = computed(() => 
-  tasks.value
+const pendingTasks = computed(() => {
+  // 获取所有未完成且未删除的任务
+  const allPendingTasks = tasks.value
     .filter(task => !task.completed && !task.deleted)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-)
+    
+  // 按创建时间降序排序
+  return allPendingTasks.sort((a, b) => {
+    // 首先按是否是今天的任务排序
+    const aIsToday = isToday(new Date(a.createdAt))
+    const bIsToday = isToday(new Date(b.createdAt))
+    if (aIsToday && !bIsToday) return -1
+    if (!aIsToday && bIsToday) return 1
+    
+    // 然后按创建时间降序
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+})
 
 const completedTasks = computed(() => 
   tasks.value
@@ -729,7 +762,7 @@ const handleRestoreTask = async (task: Task) => {
       await initializeTaskStats()
     }
     
-    // 确保根元素重新获得焦点
+    // 确保根元素��新获得焦点
     nextTick(() => {
       tasksViewRef.value?.focus()
     })
@@ -776,7 +809,7 @@ const handleTaskUpdate = (updatedTask: unknown) => {
     tasks.value[index] = { ...updatedTask }
   }
   
-  // 如果当前正在查看这个任务的详情，也更新详情视图
+  // 如果当前正在查看这个任务���详情，也更新详情视图
   if (currentTask.value && currentTask.value.id === updatedTask.id) {
     currentTask.value = { ...updatedTask }
   }
@@ -1005,7 +1038,7 @@ const handleImportData = () => {
   ElMessage.info('即将支持数据导入功能')
 }
 
-// 清空数据
+// 空数据
 const handleClearData = async () => {
   try {
     const result = await window.electron.ipcRenderer.invoke('clear-all-data')
@@ -1318,6 +1351,21 @@ watch(taskDetailVisible, (newVal) => {
     }
   }
 })
+
+// 添加获取任务时间标签的函数
+const getTaskTimeLabel = (createdAt: string): string => {
+  const now = new Date()
+  const taskDate = new Date(createdAt)
+  const diffDays = Math.floor((now.getTime() - taskDate.getTime()) / (1000 * 60 * 60 * 24))
+  
+  if (diffDays === 0) return ''
+  if (diffDays === 1) return '昨日任务'
+  if (diffDays === 2) return '前日任务'
+  if (diffDays <= 7) return `${diffDays}天前任务`
+  if (diffDays <= 30) return `${Math.floor(diffDays / 7)}周前任务`
+  if (diffDays <= 365) return `${Math.floor(diffDays / 30)}月前任务`
+  return `${Math.floor(diffDays / 365)}年前任务`
+}
 </script>
 
 <style lang="scss" scoped>
@@ -1333,7 +1381,7 @@ watch(taskDetailVisible, (newVal) => {
     .statistic-item {
       text-align: center;
       padding: 15px;  // 增加内边距
-      transition: all 0.3s ease;  // 添加过渡效果
+      transition: all 0.3s ease;  // ���加过渡效果
 
       .title {
         color: var(--el-text-color-secondary);
@@ -1685,6 +1733,46 @@ watch(taskDetailVisible, (newVal) => {
   .data-management {
     display: flex;
     gap: 12px;
+  }
+}
+
+.task-info {
+  .el-tag {
+    margin-left: 8px;
+    
+    &.el-tag--warning.el-tag--dark {
+      background-color: var(--el-color-warning-light-5);
+      border-color: var(--el-color-warning-light-3);
+      color: var(--el-color-warning-dark-2);
+    }
+  }
+}
+
+.task-meta {
+  .meta-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+    
+    .meta-label {
+      color: var(--el-text-color-secondary);
+      margin-right: 8px;
+    }
+    
+    .meta-value {
+      margin-right: 8px;
+    }
+    
+    .time-tag {
+      margin-left: 8px;
+      background-color: var(--el-color-warning-light-5);
+      border-color: var(--el-color-warning-light-3);
+      color: var(--el-color-warning-dark-2);
+    }
   }
 }
 </style> 
