@@ -200,65 +200,46 @@
     <el-dialog
       v-model="showTaskDashboard"
       :title="dashboardTitle"
-      width="80%"
+      width="800px"
       :fullscreen="false"
       destroy-on-close
       top="10vh"
     >
       <div class="task-dashboard">
         <!-- 仪表盘统计 -->
-        <el-row :gutter="20" class="dashboard-stats">
-          <el-col :span="8">
-            <el-card shadow="hover">
-              <div class="statistic-item">
-                <div class="title">总任务数</div>
-                <div class="value">{{ rangeStats.total }}</div>
-              </div>
-            </el-card>
-          </el-col>
-          <el-col :span="8">
-            <el-card shadow="hover">
-              <div class="statistic-item">
-                <div class="title">已完成</div>
-                <div class="value success">{{ rangeStats.completed }}</div>
-              </div>
-            </el-card>
-          </el-col>
-          <el-col :span="8">
-            <el-card shadow="hover">
-              <div class="statistic-item">
-                <div class="title">待处理</div>
-                <div class="value warning">{{ rangeStats.pending }}</div>
-              </div>
-            </el-card>
-          </el-col>
-        </el-row>
+        <div class="stats-header">
+          <div class="stats-item">
+            <div class="stats-label">总任务数</div>
+            <div class="stats-value">{{ rangeStats.total }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">已完成</div>
+            <div class="stats-value success">{{ rangeStats.completed }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">待处理</div>
+            <div class="stats-value warning">{{ rangeStats.pending }}</div>
+          </div>
+        </div>
+
+        <el-divider />
 
         <!-- 任务列表 -->
-        <div class="range-tasks-list">
-          <el-table :data="rangeTasks" style="width: 100%" :max-height="500">
-            <el-table-column type="index" width="50" />
-            <el-table-column prop="name" label="任务名称">
-              <template #default="{ row }">
-                <div class="task-name-cell">
-                  <span>{{ row.name }}</span>
-                  <el-tag v-if="row.description" size="small" type="success">额外说明</el-tag>
+        <div class="tasks-list">
+          <div v-for="task in rangeTasks" :key="task.id" class="task-item" @click="openTaskDetail(task)">
+            <div class="task-content">
+              <div class="task-main">
+                <span class="task-name">{{ task.name }}</span>
+                <div class="task-tags">
+                  <el-tag v-if="task.description" size="small" type="success" effect="plain">额外说明</el-tag>
+                  <el-tag size="small" :type="task.completed ? 'success' : 'warning'" effect="light">
+                    {{ task.completed ? '已完成' : '进行中' }}
+                  </el-tag>
                 </div>
-              </template>
-            </el-table-column>
-            <el-table-column prop="completed" label="状态" width="100">
-              <template #default="{ row }">
-                <el-tag :type="row.completed ? 'success' : 'warning'">
-                  {{ row.completed ? '已完成' : '进行中' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="createdAt" label="创建时间" width="200">
-              <template #default="{ row }">
-                {{ formatDate(row.createdAt) }}
-              </template>
-            </el-table-column>
-          </el-table>
+              </div>
+              <span class="task-time">{{ formatTime(task.createdAt) }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -345,11 +326,21 @@
             <div class="card-header">
               <h2>已删除任务 ({{ deletedTasks.length }})</h2>
               <div class="header-actions">
-                <el-button type="primary" size="small" :disabled="!selectedDeletedTask" @click="handleRestoreTask(selectedDeletedTask)">
+                <el-button 
+                  type="primary" 
+                  size="small" 
+                  :disabled="!selectedDeletedTask" 
+                  @click="selectedDeletedTask && handleRestoreTask(selectedDeletedTask)"
+                >
                   恢复选中任务
                 </el-button>
-                <el-button type="danger" size="small" :disabled="!selectedDeletedTask" @click="handleHardDeleteTask(selectedDeletedTask)">
-                  永久��除
+                <el-button 
+                  type="danger" 
+                  size="small" 
+                  :disabled="!selectedDeletedTask" 
+                  @click="selectedDeletedTask && handleHardDeleteTask(selectedDeletedTask)"
+                >
+                  永久删除
                 </el-button>
               </div>
             </div>
@@ -440,12 +431,297 @@
         </el-form>
       </div>
     </el-dialog>
+
+    <!-- 修改本周任务分布对话框 -->
+    <el-dialog
+      v-model="showWeekDistribution"
+      title="本周任务仪表盘"
+      width="800px"
+      destroy-on-close
+    >
+      <div class="week-stats">
+        <div class="stats-header">
+          <div class="stats-item">
+            <div class="stats-label">总任务数</div>
+            <div class="stats-value">{{ weekTasks.length }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">已完成</div>
+            <div class="stats-value success">{{ weekTasks.filter(t => t.completed).length }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">待处理</div>
+            <div class="stats-value warning">{{ weekTasks.filter(t => !t.completed).length }}</div>
+          </div>
+        </div>
+        <el-divider />
+        <div class="week-tasks">
+          <div v-for="(tasks, day) in groupedWeekTasks" :key="day" class="day-group">
+            <div class="day-header" @click="toggleDayTasks(day)">
+              <div class="day-info">
+                <span class="day-label">{{ day }}</span>
+                <span class="task-count">({{ tasks.length }})</span>
+              </div>
+              <el-icon class="expand-icon" :class="{ 'is-active': expandedDays[day] }">
+                <ArrowDown />
+              </el-icon>
+            </div>
+            <div v-show="expandedDays[day]" class="day-tasks">
+              <div v-for="task in tasks" :key="task.id" class="task-item" @click="openTaskDetail(task)">
+                <div class="task-content">
+                  <div class="task-main">
+                    <span class="task-name">{{ task.name }}</span>
+                    <div class="task-tags">
+                      <el-tag v-if="task.description" size="small" type="success" effect="plain">额外说明</el-tag>
+                      <el-tag size="small" :type="task.completed ? 'success' : 'warning'" effect="light">
+                        {{ task.completed ? '已完成' : '进行中' }}
+                      </el-tag>
+                    </div>
+                  </div>
+                  <span class="task-time">{{ formatTime(task.createdAt) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 修改本月任务分布对话框 -->
+    <el-dialog
+      v-model="showMonthDistribution"
+      title="本月任务仪表盘"
+      width="800px"
+      destroy-on-close
+    >
+      <div class="month-stats">
+        <div class="stats-header">
+          <div class="stats-item">
+            <div class="stats-label">总任务数</div>
+            <div class="stats-value">{{ monthTasks.length }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">已完成</div>
+            <div class="stats-value success">{{ monthTasks.filter(t => t.completed).length }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">待处理</div>
+            <div class="stats-value warning">{{ monthTasks.filter(t => !t.completed).length }}</div>
+          </div>
+        </div>
+        <el-divider />
+        <div class="month-tasks">
+          <div v-for="(weekTasks, weekLabel) in groupedMonthTasks" :key="weekLabel" class="week-group">
+            <div class="week-header" @click="toggleWeekTasks(weekLabel)">
+              <div class="week-info">
+                <span class="week-label">{{ weekLabel }}</span>
+                <span class="task-count">({{ weekTasks.totalTasks }})</span>
+              </div>
+              <el-icon class="expand-icon" :class="{ 'is-active': expandedWeeks[weekLabel] }">
+                <ArrowDown />
+              </el-icon>
+            </div>
+            <div v-show="expandedWeeks[weekLabel]" class="week-content">
+              <div v-for="(dayTasks, dayLabel) in weekTasks.days" :key="dayLabel" class="day-group">
+                <div class="day-header" @click="toggleDayTasks(dayLabel)">
+                  <div class="day-info">
+                    <span class="day-label">{{ dayLabel }}</span>
+                    <span class="task-count">({{ dayTasks.length }})</span>
+                  </div>
+                  <el-icon class="expand-icon" :class="{ 'is-active': expandedDays[dayLabel] }">
+                    <ArrowDown />
+                  </el-icon>
+                </div>
+                <div v-show="expandedDays[dayLabel]" class="day-tasks">
+                  <div v-for="task in dayTasks" :key="task.id" class="task-item" @click="openTaskDetail(task)">
+                    <div class="task-content">
+                      <div class="task-main">
+                        <span class="task-name">{{ task.name }}</span>
+                        <div class="task-tags">
+                          <el-tag v-if="task.description" size="small" type="success" effect="plain">额外说明</el-tag>
+                          <el-tag size="small" :type="task.completed ? 'success' : 'warning'" effect="light">
+                            {{ task.completed ? '已完成' : '进行中' }}
+                          </el-tag>
+                        </div>
+                      </div>
+                      <span class="task-time">{{ formatTime(task.createdAt) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 添加本季度任务分布对话框 -->
+    <el-dialog
+      v-model="showQuarterDistribution"
+      title="本季度任务仪表盘"
+      width="800px"
+      destroy-on-close
+    >
+      <div class="quarter-stats">
+        <div class="stats-header">
+          <div class="stats-item">
+            <div class="stats-label">总任务数</div>
+            <div class="stats-value">{{ quarterTasks.length }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">已完成</div>
+            <div class="stats-value success">{{ quarterTasks.filter(t => t.completed).length }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">待处理</div>
+            <div class="stats-value warning">{{ quarterTasks.filter(t => !t.completed).length }}</div>
+          </div>
+        </div>
+        <el-divider />
+        <div class="quarter-tasks">
+          <div v-for="(monthData, monthLabel) in groupedQuarterTasks" :key="monthLabel" class="month-group">
+            <div class="month-header" @click="toggleMonthTasks(monthLabel)">
+              <div class="month-info">
+                <span class="month-label">{{ monthLabel }}</span>
+                <span class="task-count">({{ monthData.totalTasks }})</span>
+              </div>
+              <el-icon class="expand-icon" :class="{ 'is-active': expandedMonths[monthLabel] }">
+                <ArrowDown />
+              </el-icon>
+            </div>
+            <div v-show="expandedMonths[monthLabel]" class="month-content">
+              <div v-for="(weekData, weekLabel) in monthData.weeks" :key="weekLabel" class="week-group">
+                <div class="week-header" @click="toggleWeekTasks(weekLabel)">
+                  <div class="week-info">
+                    <span class="week-label">{{ weekLabel }}</span>
+                    <span class="task-count">({{ weekData.totalTasks }})</span>
+                  </div>
+                  <el-icon class="expand-icon" :class="{ 'is-active': expandedWeeks[weekLabel] }">
+                    <ArrowDown />
+                  </el-icon>
+                </div>
+                <div v-show="expandedWeeks[weekLabel]" class="week-content">
+                  <div v-for="(dayTasks, dayLabel) in weekData.days" :key="dayLabel" class="day-group">
+                    <div class="day-header" @click="toggleDayTasks(dayLabel)">
+                      <div class="day-info">
+                        <span class="day-label">{{ dayLabel }}</span>
+                        <span class="task-count">({{ dayTasks.length }})</span>
+                      </div>
+                      <el-icon class="expand-icon" :class="{ 'is-active': expandedDays[dayLabel] }">
+                        <ArrowDown />
+                      </el-icon>
+                    </div>
+                    <div v-show="expandedDays[dayLabel]" class="day-tasks">
+                      <div v-for="task in dayTasks" :key="task.id" class="task-item" @click="openTaskDetail(task)">
+                        <div class="task-content">
+                          <div class="task-main">
+                            <span class="task-name">{{ task.name }}</span>
+                            <div class="task-tags">
+                              <el-tag v-if="task.description" size="small" type="success" effect="plain">额外说明</el-tag>
+                              <el-tag size="small" :type="task.completed ? 'success' : 'warning'" effect="light">
+                                {{ task.completed ? '已完成' : '进行中' }}
+                              </el-tag>
+                            </div>
+                          </div>
+                          <span class="task-time">{{ formatTime(task.createdAt) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 添加本年度任务分布对话框 -->
+    <el-dialog
+      v-model="showYearDistribution"
+      title="本年度任务仪表盘"
+      width="800px"
+      destroy-on-close
+    >
+      <div class="year-stats">
+        <div class="stats-header">
+          <div class="stats-item">
+            <div class="stats-label">总任务数</div>
+            <div class="stats-value">{{ yearTasks.length }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">已完成</div>
+            <div class="stats-value success">{{ yearTasks.filter(t => t.completed).length }}</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-label">待处理</div>
+            <div class="stats-value warning">{{ yearTasks.filter(t => !t.completed).length }}</div>
+          </div>
+        </div>
+        <el-divider />
+        <div class="year-tasks">
+          <div v-for="(monthData, monthLabel) in groupedYearTasks" :key="monthLabel" class="month-group">
+            <div class="month-header" @click="toggleMonthTasks(monthLabel)">
+              <div class="month-info">
+                <span class="month-label">{{ monthLabel }}</span>
+                <span class="task-count">({{ monthData.totalTasks }})</span>
+              </div>
+              <el-icon class="expand-icon" :class="{ 'is-active': expandedMonths[monthLabel] }">
+                <ArrowDown />
+              </el-icon>
+            </div>
+            <div v-show="expandedMonths[monthLabel]" class="month-content">
+              <div v-for="(weekData, weekLabel) in monthData.weeks" :key="weekLabel" class="week-group">
+                <div class="week-header" @click="toggleWeekTasks(weekLabel)">
+                  <div class="week-info">
+                    <span class="week-label">{{ weekLabel }}</span>
+                    <span class="task-count">({{ weekData.totalTasks }})</span>
+                  </div>
+                  <el-icon class="expand-icon" :class="{ 'is-active': expandedWeeks[weekLabel] }">
+                    <ArrowDown />
+                  </el-icon>
+                </div>
+                <div v-show="expandedWeeks[weekLabel]" class="week-content">
+                  <div v-for="(dayTasks, dayLabel) in weekData.days" :key="dayLabel" class="day-group">
+                    <div class="day-header" @click="toggleDayTasks(dayLabel)">
+                      <div class="day-info">
+                        <span class="day-label">{{ dayLabel }}</span>
+                        <span class="task-count">({{ dayTasks.length }})</span>
+                      </div>
+                      <el-icon class="expand-icon" :class="{ 'is-active': expandedDays[dayLabel] }">
+                        <ArrowDown />
+                      </el-icon>
+                    </div>
+                    <div v-show="expandedDays[dayLabel]" class="day-tasks">
+                      <div v-for="task in dayTasks" :key="task.id" class="task-item" @click="openTaskDetail(task)">
+                        <div class="task-content">
+                          <div class="task-main">
+                            <span class="task-name">{{ task.name }}</span>
+                            <div class="task-tags">
+                              <el-tag v-if="task.description" size="small" type="success" effect="plain">额外说明</el-tag>
+                              <el-tag size="small" :type="task.completed ? 'success' : 'warning'" effect="light">
+                                {{ task.completed ? '已完成' : '进行中' }}
+                              </el-tag>
+                            </div>
+                          </div>
+                          <span class="task-time">{{ formatTime(task.createdAt) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { Plus, Setting } from '@element-plus/icons-vue'
+import { Plus, Setting, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useKeyboardShortcuts } from '../components/KeyboardShortcuts'
 
@@ -464,24 +740,48 @@ declare global {
   }
 }
 
-// 更新 Task 接口定义
+// 添加必要的类型定义
 interface Task {
-  id: number
-  name: string
-  completed: boolean
-  createdAt: string
-  deleted?: boolean
-  deletedAt?: string | null
-  description?: string
+  id: number;
+  name: string;
+  completed: boolean;
+  createdAt: string;
+  deleted?: boolean;
+  deletedAt?: string | null;
+  description?: string;
+}
+
+interface TaskStats {
+  today?: Task[];
+  week?: Task[];
+  month?: Task[];
+  quarter?: Task[];
+  year?: Task[];
+  deleted?: Task[];
+}
+
+interface TaskEvent {
+  task?: Task;
+  stats?: TaskStats;
 }
 
 interface RangeType {
-  today: string
-  week: string
-  month: string
-  quarter: string
-  year: string
-  [key: string]: string
+  today: string;
+  week: string;
+  month: string;
+  quarter: string;
+  year: string;
+  [key: string]: string;
+}
+
+interface WeekGroup {
+  totalTasks: number;
+  days: Record<string, Task[]>;
+}
+
+interface MonthGroup {
+  totalTasks: number;
+  weeks: Record<string, WeekGroup>;
 }
 
 // 闭回收站
@@ -495,15 +795,18 @@ const deleteTask = async (task: Task) => {
   if (!task || task.deleted) return
   
   try {
-    const now = new Date().toISOString()
     const deletedTask = await window.electron.ipcRenderer.invoke('delete-task', task.id)
     
     if (deletedTask) {
       // 更新本地状态
       const index = tasks.value.findIndex(t => t.id === task.id)
       if (index !== -1) {
-        tasks.value[index] = deletedTask
-        deletedTasks.value.push(deletedTask)
+        tasks.value = [
+          ...tasks.value.slice(0, index),
+          deletedTask,
+          ...tasks.value.slice(index + 1)
+        ]
+        deletedTasks.value = [...deletedTasks.value, deletedTask]
       }
       
       // 重置选中状态
@@ -526,7 +829,7 @@ const deleteTask = async (task: Task) => {
   }
 }
 
-// 定义响应式变量的类型
+// ��义响应式变量的类型
 const tasks = ref<Task[]>([])
 const todayTasks = ref<Task[]>([])
 const weekTasks = ref<Task[]>([])
@@ -536,7 +839,7 @@ const selectedTaskIndex = ref(-1)
 const viewingCompleted = ref(false)
 const showQuickAdd = ref(false)
 const newTaskName = ref('')
-const taskInput = ref()
+const taskInput = ref<any>()
 const isProcessingTask = ref(false)
 const lastTaskAddTime = ref(0)
 const quarterTasks = ref<Task[]>([])
@@ -549,7 +852,6 @@ const rangeStats = ref({
   pending: 0
 })
 const currentRange = ref('')
-const activeTab = ref('tasks')
 const taskDetailVisible = ref(false)
 const currentTask = ref<Task | null>(null)
 const taskDescription = ref('')
@@ -558,7 +860,12 @@ const showRecycleBinDialog = ref(false)
 const viewingRecycleBin = ref(false)
 const selectedDeletedTask = ref<Task | null>(null)
 const selectedDeletedIndex = ref(-1)
-const autoSaveTimer = ref<number | null>(null)
+const showWeekDistribution = ref(false)
+const expandedDays = ref<{ [key: string]: boolean }>({})
+const showMonthDistribution = ref(false)
+const expandedWeeks = ref<{ [key: string]: boolean }>({})
+const showQuarterDistribution = ref(false)
+// const expandedMonths = ref<{ [key: string]: boolean }>({})
 
 // 添加日期辅助函数
 const isToday = (date: Date) => {
@@ -602,27 +909,29 @@ const completionRate = computed(() => {
   return Math.round((completedTasks.value.length / tasks.value.length) * 100)
 })
 
-const dashboardTitle = computed(() => {
+const dashboardTitle = computed((): string => {
   const titles: RangeType = {
-    today: '今日任务仪表盘',
-    week: '本周任务仪表盘',
-    month: '本月任务仪表盘',
-    quarter: '本季度任务仪表盘',
-    year: '本年度任务仪表盘'
+    today: '今日任务',
+    week: '本周任务',
+    month: '本月任务',
+    quarter: '本季度任务',
+    year: '本年度任务'
   }
   return titles[currentRange.value] || '任务仪表盘'
 })
 
 // 修改错误处理函数
-const handleError = (error: unknown, context: string) => {
+const handleError = (error: unknown, context: string): void => {
   console.error(`Error in ${context}:`, error)
+  let message = '操作失败'
+  
   if (error instanceof Error) {
-    ElMessage.error(error.message)
+    message = error.message
   } else if (typeof error === 'string') {
-    ElMessage.error(error)
-  } else {
-    ElMessage.error('操作失败')
+    message = error
   }
+  
+  ElMessage.error(message)
 }
 
 // 修改处理任务添加的方法
@@ -668,7 +977,7 @@ const handleAddTask = async () => {
 // 修改处理对话框打开的方法
 const handleDialogOpen = () => {
   console.log('Dialog opened')
-  // 使用个 nextTick 确保在 DOM 完全更新后再聚焦
+  // 使用个 nextTick 确保在 DOM 完更新后再聚焦
   nextTick(() => {
     nextTick(() => {
       if (taskInput.value) {
@@ -688,7 +997,7 @@ const handleDialogOpen = () => {
   })
 }
 
-// 处理对话框关闭
+// 处理对话框关���
 const handleDialogClose = () => {
   console.log('Dialog closed')
   newTaskName.value = ''
@@ -743,7 +1052,12 @@ const handleRestoreTask = async (task: Task) => {
       // 更新本地状态
       const index = tasks.value.findIndex(t => t.id === task.id)
       if (index !== -1) {
-        tasks.value[index] = restoredTask
+        tasks.value = [
+          ...tasks.value.slice(0, index),
+          restoredTask,
+          ...tasks.value.slice(index + 1)
+        ]
+        
         // 从回收站中移除
         const deletedIndex = deletedTasks.value.findIndex(t => t.id === task.id)
         if (deletedIndex !== -1) {
@@ -762,7 +1076,7 @@ const handleRestoreTask = async (task: Task) => {
       await initializeTaskStats()
     }
     
-    // 确保根元素��新获得焦点
+    // 确保根元素重新获得焦点
     nextTick(() => {
       tasksViewRef.value?.focus()
     })
@@ -771,16 +1085,32 @@ const handleRestoreTask = async (task: Task) => {
   }
 }
 
-// 显示指定时间范围的任务
+// 显示不同时间范围的任务
 const showRangeTasks = async (range: string) => {
-  console.log('Showing range tasks:', range)
+  if (range === 'week') {
+    showWeekDistribution.value = true
+    return
+  }
+  if (range === 'month') {
+    showMonthDistribution.value = true
+    return
+  }
+  if (range === 'quarter') {
+    showQuarterDistribution.value = true
+    return
+  }
+  if (range === 'year') {
+    showYearDistribution.value = true
+    return
+  }
+  
   currentRange.value = range
-  showTaskDashboard.value = true
   try {
     const data = await window.electron.ipcRenderer.invoke('get-range-tasks', range)
     if (data) {
       rangeTasks.value = data.tasks || []
       rangeStats.value = data.stats || { total: 0, completed: 0, pending: 0 }
+      showTaskDashboard.value = true
     }
   } catch (error) {
     handleError(error, 'showRangeTasks')
@@ -800,16 +1130,14 @@ function isTask(value: unknown): value is Task {
 }
 
 // 修改任务更新处理函数
-const handleTaskUpdate = (updatedTask: unknown) => {
-  if (!isTask(updatedTask)) return
-
-  // 更新任务列表中的任务
+const handleTaskUpdate = (updatedTask: Task): void => {
   const index = tasks.value.findIndex(t => t.id === updatedTask.id)
   if (index !== -1) {
-    tasks.value[index] = { ...updatedTask }
+    tasks.value = tasks.value.map((task, i) => 
+      i === index ? { ...updatedTask } : task
+    )
   }
   
-  // 如果当前正在查看这个任务���详情，也更新详情视图
   if (currentTask.value && currentTask.value.id === updatedTask.id) {
     currentTask.value = { ...updatedTask }
   }
@@ -836,7 +1164,7 @@ const handleSaveTask = async () => {
   }
 }
 
-// 修改自动保存函数
+// 修改自保存函数
 const handleAutoSave = () => {
   if (!currentTask.value || !isTask(currentTask.value) || !taskDetailVisible.value) return
   
@@ -857,7 +1185,7 @@ const handleAutoSave = () => {
     })
 }
 
-// 修改打开任务详情的方法
+// 修改打��任务详情的方法
 const openTaskDetail = (task: unknown) => {
   if (!isTask(task)) return
   currentTask.value = { ...task }
@@ -901,7 +1229,7 @@ const selectDeletedTask = (task: Task, index: number) => {
   viewingCompleted.value = false
 }
 
-// 修改 watch 函数重置所有选中状态
+// 修改 watch 函数重置所有选状态
 watch(showRecycleBinDialog, (newValue) => {
   console.log('Recycle bin dialog state changed:', newValue)
   if (!newValue) {
@@ -1014,7 +1342,7 @@ const loadConfig = async () => {
   }
 }
 
-// 选择数据路径
+// 选���数据路径
 const handleSelectDataPath = async () => {
   try {
     const result = await window.electron.ipcRenderer.invoke('select-data-path')
@@ -1082,10 +1410,10 @@ const handleClearData = async () => {
 }
 
 // 添加初始任务统计的方法
-const initializeTaskStats = async () => {
+const initializeTaskStats = async (): Promise<void> => {
   try {
     // 加载各时间维度的任务
-    const ranges = ['today', 'week', 'month', 'quarter', 'year']
+    const ranges = ['today', 'week', 'month', 'quarter', 'year'] as const
     for (const range of ranges) {
       const result = await window.electron.ipcRenderer.invoke('get-range-tasks', range)
       if (result && result.tasks) {
@@ -1122,22 +1450,31 @@ onMounted(async () => {
     tasksViewRef.value.focus()
   }
 
+  // 请求初始任务数据
+  try {
+    const initialTasks = await window.electron.ipcRenderer.invoke('get-tasks')
+    if (initialTasks) {
+      tasks.value = initialTasks
+    }
+  } catch (error) {
+    handleError(error, 'initial tasks loading')
+  }
+
   // 初始化任务统计
   await initializeTaskStats()
 
   // 初始化事件监听
-  window.electron.ipcRenderer.on('task-added', async (data: any) => {
+  window.electron.ipcRenderer.on('task-added', (_: unknown, data: TaskEvent) => {
     console.log('Task added event received:', data)
     if (data.task) {
       handleNewTask(data.task)
     }
     if (data.stats) {
-      // 更新各时间维度的任务统计
       updateTaskStats(data.stats)
     }
   })
 
-  window.electron.ipcRenderer.on('task-updated', async (data: any) => {
+  window.electron.ipcRenderer.on('task-updated', (_: unknown, data: TaskEvent) => {
     console.log('Task updated event received:', data)
     if (data.task) {
       handleTaskUpdate(data.task)
@@ -1147,7 +1484,7 @@ onMounted(async () => {
     }
   })
 
-  window.electron.ipcRenderer.on('task-deleted', async (data: any) => {
+  window.electron.ipcRenderer.on('task-deleted', (_: unknown, data: TaskEvent) => {
     console.log('Task deleted event received:', data)
     if (data.task) {
       const deletedTask = data.task
@@ -1159,12 +1496,14 @@ onMounted(async () => {
           deletedAt: deletedTask.deletedAt || new Date().toISOString(),
           createdAt: deletedTask.createdAt || new Date().toISOString()
         }
-        tasks.value[index] = taskWithDates
+        tasks.value = tasks.value.map((task, i) => 
+          i === index ? taskWithDates : task
+        )
         
         // 检查任务是否已经在回收站中
         const existingIndex = deletedTasks.value.findIndex(t => t.id === deletedTask.id)
         if (existingIndex === -1) {
-          deletedTasks.value.push(taskWithDates)
+          deletedTasks.value = [...deletedTasks.value, taskWithDates]
         }
       }
     }
@@ -1173,7 +1512,7 @@ onMounted(async () => {
     }
   })
 
-  window.electron.ipcRenderer.on('task-restored', async (data: any) => {
+  window.electron.ipcRenderer.on('task-restored', (_: unknown, data: TaskEvent) => {
     console.log('Task restored event received:', data)
     if (data.task) {
       const restoredTask = data.task
@@ -1186,12 +1525,14 @@ onMounted(async () => {
           deleted: false,
           deletedAt: null
         }
-        tasks.value[index] = taskWithAllData
+        tasks.value = tasks.value.map((task, i) => 
+          i === index ? taskWithAllData : task
+        )
         
         // 从回收站中移除
         const deletedIndex = deletedTasks.value.findIndex(t => t.id === restoredTask.id)
         if (deletedIndex !== -1) {
-          deletedTasks.value.splice(deletedIndex, 1)
+          deletedTasks.value = deletedTasks.value.filter((_, i) => i !== deletedIndex)
         }
       }
     }
@@ -1216,79 +1557,6 @@ onMounted(async () => {
     }
   }
   window.addEventListener('keydown', quickAddHandler)
-
-  console.log('Setting up IPC listeners...')
-  // 请求初始任务数据
-  try {
-    const initialTasks = await window.electron.ipcRenderer.invoke('get-tasks')
-    if (initialTasks) {
-      tasks.value = initialTasks
-    }
-  } catch (error) {
-    handleError(error, 'initial tasks loading')
-  }
-  
-  window.electron.ipcRenderer.on('task-updated', (updatedTask: Task) => {
-    console.log('Task updated:', updatedTask)
-    handleTaskUpdate(updatedTask)
-  })
-  
-  window.electron.ipcRenderer.on('task-deleted', (deletedTask: Task) => {
-    console.log('Task deleted:', deletedTask)
-    const index = tasks.value.findIndex(t => t.id === deletedTask.id)
-    if (index !== -1) {
-      const taskWithDates = {
-        ...deletedTask,
-        deleted: true,
-        deletedAt: deletedTask.deletedAt || new Date().toISOString(),
-        createdAt: deletedTask.createdAt || new Date().toISOString()
-      }
-      tasks.value[index] = taskWithDates
-      
-      // 检查任务是否已经在回收站中
-      const existingIndex = deletedTasks.value.findIndex(t => t.id === deletedTask.id)
-      if (existingIndex === -1) {
-        deletedTasks.value.push(taskWithDates)
-      }
-    }
-  })
-  
-  window.electron.ipcRenderer.on('task-restored', (restoredTask: Task) => {
-    console.log('Task restored:', restoredTask)
-    const index = tasks.value.findIndex(t => t.id === restoredTask.id)
-    if (index !== -1) {
-      // 保留原始任务的所有数据
-      const taskWithAllData = {
-        ...tasks.value[index],
-        ...restoredTask,
-        deleted: false,
-        deletedAt: null
-      }
-      tasks.value[index] = taskWithAllData
-      
-      // 从回收站中移除
-      const deletedIndex = deletedTasks.value.findIndex(t => t.id === restoredTask.id)
-      if (deletedIndex !== -1) {
-        deletedTasks.value.splice(deletedIndex, 1)
-      }
-    }
-  })
-  
-  window.electron.ipcRenderer.on('tasks-stats-updated', (stats: any) => {
-    console.log('Tasks stats updated:', stats)
-    todayTasks.value = stats.today
-    weekTasks.value = stats.week
-    monthTasks.value = stats.month
-    quarterTasks.value = stats.quarter
-    yearTasks.value = stats.year
-    deletedTasks.value = stats.deleted
-  })
-  
-  window.electron.ipcRenderer.on('range-tasks-loaded', (data: any) => {
-    console.log('Range tasks loaded:', data)
-    rangeTasks.value = data.tasks || []
-    rangeStats.value = data.stats || { total: 0, completed: 0, pending: 0 }
-  })
 
   onUnmounted(() => {
     console.log('Tasks component unmounting, cleaning up listeners...')
@@ -1327,8 +1595,8 @@ const showConfig = async () => {
   }
 }
 
-// 添加更新任务统计辅助函数
-const updateTaskStats = (stats: any) => {
+// 修改任务统计更新函数
+const updateTaskStats = (stats: TaskStats): void => {
   console.log('Updating task stats:', stats)
   if (stats.today) todayTasks.value = stats.today
   if (stats.week) weekTasks.value = stats.week
@@ -1338,19 +1606,13 @@ const updateTaskStats = (stats: any) => {
   if (stats.deleted) deletedTasks.value = stats.deleted
 }
 
-// 监听对话框显示状态
-watch(taskDetailVisible, (newVal) => {
-  if (newVal) {
-    // 对话框打开时，启动自动保存定时器
-    autoSaveTimer.value = window.setInterval(handleAutoSave, 3000)
-  } else {
-    // 对话框关闭时，清除定时器
-    if (autoSaveTimer.value) {
-      clearInterval(autoSaveTimer.value)
-      autoSaveTimer.value = null
-    }
+// 修改切换日任务显示函数
+const toggleDayTasks = (day: string): void => {
+  expandedDays.value = {
+    ...expandedDays.value,
+    [day]: !expandedDays.value[day]
   }
-})
+}
 
 // 添加获取任务时间标签的函数
 const getTaskTimeLabel = (createdAt: string): string => {
@@ -1366,6 +1628,238 @@ const getTaskTimeLabel = (createdAt: string): string => {
   if (diffDays <= 365) return `${Math.floor(diffDays / 30)}月前任务`
   return `${Math.floor(diffDays / 365)}年前任务`
 }
+
+// 添加时间格式化函数
+const formatTime = (dateString: string): string => {
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleTimeString('zh-CN', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false
+    })
+  } catch {
+    return '无效时间'
+  }
+}
+
+// 修改按天分组的周任务计算属性
+const groupedWeekTasks = computed(() => {
+  const groups: { [key: string]: Task[] } = {}
+  
+  weekTasks.value.forEach(task => {
+    const date = new Date(task.createdAt)
+    const dayIndex = date.getDay()
+    const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+    const dayName = days[dayIndex]
+    if (!groups[dayName]) {
+      groups[dayName] = []
+    }
+    groups[dayName].push(task)
+  })
+  
+  // 对每天的任务按创建时间排序
+  Object.keys(groups).forEach(day => {
+    groups[day].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  })
+  
+  // 只返回有任务的日期
+  const filteredGroups: { [key: string]: Task[] } = {}
+  Object.entries(groups).forEach(([day, tasks]) => {
+    if (tasks.length > 0) {
+      filteredGroups[day] = tasks
+    }
+  })
+  
+  return filteredGroups
+})
+
+// 添加切换周任务显示的函数
+const toggleWeekTasks = (weekLabel: string): void => {
+  expandedWeeks.value = {
+    ...expandedWeeks.value,
+    [weekLabel]: !expandedWeeks.value[weekLabel]
+  }
+}
+
+// 添加按月分组的任务计算属性
+const groupedMonthTasks = computed(() => {
+  const groups: { [key: string]: { totalTasks: number, days: { [key: string]: Task[] } } } = {}
+  
+  monthTasks.value.forEach(task => {
+    const date = new Date(task.createdAt)
+    const weekNumber = getWeekNumber(date)
+    const weekLabel = `第${weekNumber}周`
+    const dayLabel = formatDayLabel(date)
+    
+    if (!groups[weekLabel]) {
+      groups[weekLabel] = {
+        totalTasks: 0,
+        days: {}
+      }
+    }
+    
+    if (!groups[weekLabel].days[dayLabel]) {
+      groups[weekLabel].days[dayLabel] = []
+    }
+    
+    groups[weekLabel].days[dayLabel].push(task)
+    groups[weekLabel].totalTasks++
+  })
+  
+  // 对每天的任务按创建时间排序
+  Object.keys(groups).forEach(weekLabel => {
+    Object.keys(groups[weekLabel].days).forEach(dayLabel => {
+      groups[weekLabel].days[dayLabel].sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+    })
+  })
+  
+  return groups
+})
+
+// 添加获取周数的辅助函数
+const getWeekNumber = (date: Date): string => {
+  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1)
+  const dayOfWeek = firstDay.getDay()
+  const weekNumber = Math.ceil((date.getDate() + dayOfWeek) / 7)
+  return String(weekNumber)
+}
+
+// 添加格式化日期标签的辅助函数
+const formatDayLabel = (date: Date): string => {
+  const month = String(date.getMonth() + 1)
+  const day = String(date.getDate())
+  return `${month}月${day}日`
+}
+
+// 添加本季度任务分布相关的状态
+// const showQuarterDistribution = ref(false)
+const expandedMonths = ref<{ [key: string]: boolean }>({})
+
+// 添加切换月任务显示的函数
+const toggleMonthTasks = (monthLabel: string): void => {
+  expandedMonths.value = {
+    ...expandedMonths.value,
+    [monthLabel]: !expandedMonths.value[monthLabel]
+  }
+}
+
+// 添加按季度分组的任务计算属性
+const groupedQuarterTasks = computed(() => {
+  const groups: Record<string, MonthGroup> = {};
+
+  quarterTasks.value.forEach(task => {
+    const date = new Date(task.createdAt);
+    const monthLabel = formatMonthLabel(date);
+    const weekNumber = getWeekNumber(date);
+    const weekLabel = `第${weekNumber}周`;
+    const dayLabel = formatDayLabel(date);
+    
+    if (!groups[monthLabel]) {
+      groups[monthLabel] = {
+        totalTasks: 0,
+        weeks: {}
+      };
+    }
+    
+    if (!groups[monthLabel].weeks[weekLabel]) {
+      groups[monthLabel].weeks[weekLabel] = {
+        totalTasks: 0,
+        days: {}
+      };
+    }
+    
+    if (!groups[monthLabel].weeks[weekLabel].days[dayLabel]) {
+      groups[monthLabel].weeks[weekLabel].days[dayLabel] = [];
+    }
+    
+    groups[monthLabel].weeks[weekLabel].days[dayLabel].push(task);
+    groups[monthLabel].weeks[weekLabel].totalTasks++;
+    groups[monthLabel].totalTasks++;
+  });
+  
+  // 对每个层级的任务按时间排序
+  Object.keys(groups).forEach(monthLabel => {
+    Object.keys(groups[monthLabel].weeks).forEach(weekLabel => {
+      Object.keys(groups[monthLabel].weeks[weekLabel].days).forEach(dayLabel => {
+        groups[monthLabel].weeks[weekLabel].days[dayLabel].sort((a, b) => {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+      });
+    });
+  });
+  
+  return groups;
+});
+
+// 添加格式化月份标签的辅助函数
+const formatMonthLabel = (date: Date): string => {
+  const month = String(date.getMonth() + 1)
+  return `${month}月`
+}
+
+// 添加本年度任务分布相关的状态
+const showYearDistribution = ref(false)
+
+// 添加按年度分组的任务计算属性
+const groupedYearTasks = computed(() => {
+  const groups: Record<string, MonthGroup> = {};
+  
+  yearTasks.value.forEach(task => {
+    const date = new Date(task.createdAt);
+    const monthLabel = formatMonthLabel(date);
+    const weekNumber = getWeekNumber(date);
+    const weekLabel = `第${weekNumber}周`;
+    const dayLabel = formatDayLabel(date);
+    
+    if (!groups[monthLabel]) {
+      groups[monthLabel] = {
+        totalTasks: 0,
+        weeks: {}
+      };
+    }
+    
+    if (!groups[monthLabel].weeks[weekLabel]) {
+      groups[monthLabel].weeks[weekLabel] = {
+        totalTasks: 0,
+        days: {}
+      };
+    }
+    
+    if (!groups[monthLabel].weeks[weekLabel].days[dayLabel]) {
+      groups[monthLabel].weeks[weekLabel].days[dayLabel] = [];
+    }
+    
+    groups[monthLabel].weeks[weekLabel].days[dayLabel].push(task);
+    groups[monthLabel].weeks[weekLabel].totalTasks++;
+    groups[monthLabel].totalTasks++;
+  });
+  
+  // 对每个层级的任务按时间排序
+  Object.keys(groups).forEach(monthLabel => {
+    Object.keys(groups[monthLabel].weeks).forEach(weekLabel => {
+      Object.keys(groups[monthLabel].weeks[weekLabel].days).forEach(dayLabel => {
+        groups[monthLabel].weeks[weekLabel].days[dayLabel].sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      });
+    });
+  });
+  
+  return groups;
+});
+
+// 修改错误处理函数，添加类型声明
+
+
+// 修改自动保存函数，确保它被使用
+watch([taskTitle, taskDescription], () => {
+  if (taskDetailVisible.value) {
+    handleAutoSave();
+  }
+}, { deep: true });
 </script>
 
 <style lang="scss" scoped>
@@ -1381,7 +1875,7 @@ const getTaskTimeLabel = (createdAt: string): string => {
     .statistic-item {
       text-align: center;
       padding: 15px;  // 增加内边距
-      transition: all 0.3s ease;  // ���加过渡效果
+      transition: all 0.3s ease;  // 加过渡效果
 
       .title {
         color: var(--el-text-color-secondary);
@@ -1404,7 +1898,7 @@ const getTaskTimeLabel = (createdAt: string): string => {
       
       &:hover {
         transform: translateY(-5px);  // 悬浮时上移
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);  // 增强悬浮时的阴影
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);  // 增强悬浮的阴影
         
         .value {
           transform: scale(1.1);  // 数字放大效果
@@ -1542,26 +2036,91 @@ const getTaskTimeLabel = (createdAt: string): string => {
 }
 
 .task-dashboard {
-  .dashboard-stats {
-    margin-bottom: 24px;
-    
-    .value {
-      &.success {
-        color: var(--el-color-success);
+  padding: 20px;
+
+  .stats-header {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+
+    .stats-item {
+      text-align: center;
+      padding: 15px 30px;
+      border-radius: 8px;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
       }
-      
-      &.warning {
-        color: var(--el-color-warning);
+
+      .stats-label {
+        color: var(--el-text-color-secondary);
+        font-size: 14px;
+        margin-bottom: 8px;
       }
-      
-      &.danger {
-        color: var(--el-color-danger);
+
+      .stats-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--el-color-primary);
+
+        &.success {
+          color: var(--el-color-success);
+        }
+
+        &.warning {
+          color: var(--el-color-warning);
+        }
       }
     }
   }
-  
-  .range-tasks-list {
-    margin-top: 24px;
+
+  .tasks-list {
+    .task-item {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--el-border-color-lighter);
+      cursor: pointer;
+      transition: all 0.3s ease;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &:hover {
+        background: var(--el-color-primary-light-9);
+        transform: translateX(4px);
+      }
+
+      .task-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 20px;
+
+        .task-main {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .task-name {
+            font-weight: 500;
+          }
+
+          .task-tags {
+            display: flex;
+            gap: 8px;
+          }
+        }
+
+        .task-time {
+          color: var(--el-text-color-secondary);
+          font-size: 14px;
+        }
+      }
+    }
   }
 }
 
@@ -1775,4 +2334,946 @@ const getTaskTimeLabel = (createdAt: string): string => {
     }
   }
 }
-</style> 
+
+.time-distribution {
+  padding: 20px;
+  
+  .distribution-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    
+    .day-label {
+      min-width: 80px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--el-text-color-primary);
+    }
+    
+    .progress-wrapper {
+      flex: 1;
+      margin-left: 20px;
+      
+      .progress-bar {
+        margin: 0;
+      }
+    }
+  }
+  
+  .day-tasks {
+    padding: 15px 0 5px 80px;
+    
+    .task-item-mini {
+      padding: 12px 15px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+      background-color: var(--el-fill-color-light);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      
+      &:hover {
+        background-color: var(--el-fill-color);
+        transform: translateX(4px);
+      }
+      
+      .task-info {
+        .task-name {
+          font-size: 14px;
+          color: var(--el-text-color-primary);
+          margin-bottom: 8px;
+          display: block;
+        }
+        
+        .task-meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          
+          .el-tag {
+            font-size: 12px;
+          }
+          
+          .task-time {
+            color: var(--el-text-color-secondary);
+            font-size: 12px;
+          }
+        }
+      }
+    }
+  }
+}
+
+:deep(.el-collapse) {
+  border: none;
+  
+  .el-collapse-item {
+    margin-bottom: 10px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 6px;
+    overflow: hidden;
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+    
+    .el-collapse-item__header {
+      padding: 12px 15px;
+      background-color: var(--el-bg-color);
+      border-bottom: none;
+      
+      &:hover {
+        background-color: var(--el-fill-color-light);
+      }
+    }
+    
+    .el-collapse-item__content {
+      padding: 0 15px;
+      background-color: var(--el-bg-color);
+    }
+  }
+}
+
+.week-stats {
+  padding: 20px;
+
+  .stats-header {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+
+    .stats-item {
+      text-align: center;
+      padding: 15px 30px;
+      border-radius: 8px;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+
+      .stats-label {
+        color: var(--el-text-color-secondary);
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+
+      .stats-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--el-color-primary);
+
+        &.success {
+          color: var(--el-color-success);
+        }
+
+        &.warning {
+          color: var(--el-color-warning);
+        }
+      }
+    }
+  }
+
+  .week-tasks {
+    .day-group {
+      margin-bottom: 16px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+
+      &:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+
+      .day-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 20px;
+        background: var(--el-color-primary-light-9);
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: var(--el-color-primary-light-8);
+        }
+
+        .day-info {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .day-label {
+            font-weight: 600;
+            color: var(--el-color-primary);
+          }
+
+          .task-count {
+            color: var(--el-text-color-secondary);
+            font-size: 14px;
+          }
+        }
+
+        .expand-icon {
+          font-size: 16px;
+          color: var(--el-color-primary);
+          transition: transform 0.3s ease;
+
+          &.is-active {
+            transform: rotate(180deg);
+          }
+        }
+      }
+
+      .day-tasks {
+        padding: 0 20px;
+
+        .task-item {
+          padding: 12px 0;
+          border-bottom: 1px solid var(--el-border-color-lighter);
+          cursor: pointer;
+          transition: all 0.3s ease;
+
+          &:last-child {
+            border-bottom: none;
+          }
+
+          &:hover {
+            background: var(--el-color-primary-light-9);
+            transform: translateX(4px);
+          }
+
+          .task-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            .task-main {
+              display: flex;
+              align-items: center;
+              gap: 12px;
+
+              .task-name {
+                font-weight: 500;
+              }
+
+              .task-tags {
+                display: flex;
+                gap: 8px;
+              }
+            }
+
+            .task-time {
+              color: var(--el-text-color-secondary);
+              font-size: 14px;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+.month-stats {
+  padding: 20px;
+
+  .stats-header {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+
+    .stats-item {
+      text-align: center;
+      padding: 15px 30px;
+      border-radius: 8px;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+
+      .stats-label {
+        color: var(--el-text-color-secondary);
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+
+      .stats-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--el-color-primary);
+
+        &.success {
+          color: var(--el-color-success);
+        }
+
+        &.warning {
+          color: var(--el-color-warning);
+        }
+      }
+    }
+  }
+
+  .month-tasks {
+    .week-group {
+      margin-bottom: 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+
+      .week-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        background: var(--el-color-primary-dark-2);
+        color: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: var(--el-color-primary);
+        }
+
+        .week-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .week-label {
+            font-weight: 600;
+          }
+
+          .task-count {
+            opacity: 0.8;
+          }
+        }
+
+        .expand-icon {
+          font-size: 16px;
+          transition: transform 0.3s ease;
+          color: white;
+
+          &.is-active {
+            transform: rotate(180deg);
+          }
+        }
+      }
+
+      .week-content {
+        padding: 10px;
+
+        .day-group {
+          margin-bottom: 10px;
+          border-radius: 6px;
+          overflow: hidden;
+          background: var(--el-bg-color);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+
+          &:last-child {
+            margin-bottom: 0;
+          }
+
+          .day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background: var(--el-color-primary-light-9);
+            cursor: pointer;
+            transition: all 0.3s ease;
+
+            &:hover {
+              background: var(--el-color-primary-light-8);
+            }
+
+            .day-info {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+
+              .day-label {
+                font-weight: 500;
+                color: var(--el-color-primary);
+              }
+
+              .task-count {
+                color: var(--el-text-color-secondary);
+                font-size: 14px;
+              }
+            }
+
+            .expand-icon {
+              font-size: 16px;
+              color: var(--el-color-primary);
+              transition: transform 0.3s ease;
+
+              &.is-active {
+                transform: rotate(180deg);
+              }
+            }
+          }
+
+          .day-tasks {
+            padding: 0 20px;
+
+            .task-item {
+              padding: 12px 0;
+              border-bottom: 1px solid var(--el-border-color-lighter);
+              cursor: pointer;
+              transition: all 0.3s ease;
+
+              &:last-child {
+                border-bottom: none;
+              }
+
+              &:hover {
+                background: var(--el-color-primary-light-9);
+                transform: translateX(4px);
+              }
+
+              .task-content {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+
+                .task-main {
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+
+                  .task-name {
+                    font-weight: 500;
+                  }
+
+                  .task-tags {
+                    display: flex;
+                    gap: 8px;
+                  }
+                }
+
+                .task-time {
+                  color: var(--el-text-color-secondary);
+                  font-size: 14px;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+.quarter-stats {
+  padding: 20px;
+
+  .stats-header {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+
+    .stats-item {
+      text-align: center;
+      padding: 15px 30px;
+      border-radius: 8px;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+
+      .stats-label {
+        color: var(--el-text-color-secondary);
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+
+      .stats-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--el-color-primary);
+
+        &.success {
+          color: var(--el-color-success);
+        }
+
+        &.warning {
+          color: var(--el-color-warning);
+        }
+      }
+    }
+  }
+
+  .quarter-tasks {
+    .month-group {
+      margin-bottom: 24px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+
+      .month-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: var(--el-color-primary-dark-2);
+        color: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: var(--el-color-primary);
+        }
+
+        .month-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .month-label {
+            font-weight: 600;
+            font-size: 16px;
+          }
+
+          .task-count {
+            opacity: 0.8;
+          }
+        }
+
+        .expand-icon {
+          font-size: 16px;
+          transition: transform 0.3s ease;
+          color: white;
+
+          &.is-active {
+            transform: rotate(180deg);
+          }
+        }
+      }
+
+      .month-content {
+        padding: 12px;
+
+        .week-group {
+          margin-bottom: 16px;
+          border-radius: 6px;
+          overflow: hidden;
+          background: var(--el-bg-color);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+
+          &:last-child {
+            margin-bottom: 0;
+          }
+
+          .week-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 20px;
+            background: var(--el-color-primary-light-9);
+            cursor: pointer;
+            transition: all 0.3s ease;
+
+            &:hover {
+              background: var(--el-color-primary-light-8);
+            }
+
+            .week-info {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+
+              .week-label {
+                font-weight: 500;
+                color: var(--el-color-primary);
+              }
+
+              .task-count {
+                color: var(--el-text-color-secondary);
+                font-size: 14px;
+              }
+            }
+
+            .expand-icon {
+              font-size: 16px;
+              color: var(--el-color-primary);
+              transition: transform 0.3s ease;
+
+              &.is-active {
+                transform: rotate(180deg);
+              }
+            }
+          }
+
+          .week-content {
+            padding: 10px;
+
+            .day-group {
+              margin-bottom: 10px;
+              border-radius: 6px;
+              overflow: hidden;
+              background: var(--el-bg-color);
+              box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+
+              &:last-child {
+                margin-bottom: 0;
+              }
+
+              .day-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 20px;
+                background: var(--el-color-primary-light-9);
+                cursor: pointer;
+                transition: all 0.3s ease;
+
+                &:hover {
+                  background: var(--el-color-primary-light-8);
+                }
+
+                .day-info {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+
+                  .day-label {
+                    font-weight: 500;
+                    color: var(--el-color-primary);
+                  }
+
+                  .task-count {
+                    color: var(--el-text-color-secondary);
+                    font-size: 14px;
+                  }
+                }
+
+                .expand-icon {
+                  font-size: 16px;
+                  color: var(--el-color-primary);
+                  transition: transform 0.3s ease;
+
+                  &.is-active {
+                    transform: rotate(180deg);
+                  }
+                }
+              }
+
+              .day-tasks {
+                padding: 0 20px;
+
+                .task-item {
+                  padding: 12px 0;
+                  border-bottom: 1px solid var(--el-border-color-lighter);
+                  cursor: pointer;
+                  transition: all 0.3s ease;
+
+                  &:last-child {
+                    border-bottom: none;
+                  }
+
+                  &:hover {
+                    background: var(--el-color-primary-light-9);
+                    transform: translateX(4px);
+                  }
+
+                  .task-content {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+
+                    .task-main {
+                      display: flex;
+                      align-items: center;
+                      gap: 12px;
+
+                      .task-name {
+                        font-weight: 500;
+                      }
+
+                      .task-tags {
+                        display: flex;
+                        gap: 8px;
+                      }
+                    }
+
+                    .task-time {
+                      color: var(--el-text-color-secondary);
+                      font-size: 14px;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+.year-stats {
+  padding: 20px;
+
+  .stats-header {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+
+    .stats-item {
+      text-align: center;
+      padding: 15px 30px;
+      border-radius: 8px;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+
+      .stats-label {
+        color: var(--el-text-color-secondary);
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+
+      .stats-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--el-color-primary);
+
+        &.success {
+          color: var(--el-color-success);
+        }
+
+        &.warning {
+          color: var(--el-color-warning);
+        }
+      }
+    }
+  }
+
+  .year-tasks {
+    .month-group {
+      margin-bottom: 24px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--el-bg-color-overlay);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+
+      .month-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: var(--el-color-primary-dark-2);
+        color: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: var(--el-color-primary);
+        }
+
+        .month-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .month-label {
+            font-weight: 600;
+            font-size: 16px;
+          }
+
+          .task-count {
+            opacity: 0.8;
+          }
+        }
+
+        .expand-icon {
+          font-size: 16px;
+          transition: transform 0.3s ease;
+          color: white;
+
+          &.is-active {
+            transform: rotate(180deg);
+          }
+        }
+      }
+
+      .month-content {
+        padding: 12px;
+
+        .week-group {
+          margin-bottom: 16px;
+          border-radius: 6px;
+          overflow: hidden;
+          background: var(--el-bg-color);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+
+          &:last-child {
+            margin-bottom: 0;
+          }
+
+          .week-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 20px;
+            background: var(--el-color-primary-light-9);
+            cursor: pointer;
+            transition: all 0.3s ease;
+
+            &:hover {
+              background: var(--el-color-primary-light-8);
+            }
+
+            .week-info {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+
+              .week-label {
+                font-weight: 500;
+                color: var(--el-color-primary);
+              }
+
+              .task-count {
+                color: var(--el-text-color-secondary);
+                font-size: 14px;
+              }
+            }
+
+            .expand-icon {
+              font-size: 16px;
+              color: var(--el-color-primary);
+              transition: transform 0.3s ease;
+
+              &.is-active {
+                transform: rotate(180deg);
+              }
+            }
+          }
+
+          .week-content {
+            padding: 10px;
+
+            .day-group {
+              margin-bottom: 10px;
+              border-radius: 6px;
+              overflow: hidden;
+              background: var(--el-bg-color);
+              box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+
+              &:last-child {
+                margin-bottom: 0;
+              }
+
+              .day-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 20px;
+                background: var(--el-color-primary-light-9);
+                cursor: pointer;
+                transition: all 0.3s ease;
+
+                &:hover {
+                  background: var(--el-color-primary-light-8);
+                }
+
+                .day-info {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+
+                  .day-label {
+                    font-weight: 500;
+                    color: var(--el-color-primary);
+                  }
+
+                  .task-count {
+                    color: var(--el-text-color-secondary);
+                    font-size: 14px;
+                  }
+                }
+
+                .expand-icon {
+                  font-size: 16px;
+                  color: var(--el-color-primary);
+                  transition: transform 0.3s ease;
+
+                  &.is-active {
+                    transform: rotate(180deg);
+                  }
+                }
+              }
+
+              .day-tasks {
+                padding: 0 20px;
+
+                .task-item {
+                  padding: 12px 0;
+                  border-bottom: 1px solid var(--el-border-color-lighter);
+                  cursor: pointer;
+                  transition: all 0.3s ease;
+
+                  &:last-child {
+                    border-bottom: none;
+                  }
+
+                  &:hover {
+                    background: var(--el-color-primary-light-9);
+                    transform: translateX(4px);
+                  }
+
+                  .task-content {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+
+                    .task-main {
+                      display: flex;
+                      align-items: center;
+                      gap: 12px;
+
+                      .task-name {
+                        font-weight: 500;
+                      }
+
+                      .task-tags {
+                        display: flex;
+                        gap: 8px;
+                      }
+                    }
+
+                    .task-time {
+                      color: var(--el-text-color-secondary);
+                      font-size: 14px;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</style>
