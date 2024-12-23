@@ -273,12 +273,25 @@ function isToday(date: Date, today: Date): boolean {
 }
 
 function isThisWeek(date: Date, today: Date): boolean {
-  const todayTime = today.getTime()
-  const dateTime = date.getTime()
-  const dayOfWeek = today.getDay() || 7
-  const mondayTime = todayTime - (dayOfWeek - 1) * 86400000
-  const sundayTime = mondayTime + 6 * 86400000
-  return dateTime >= mondayTime && dateTime <= sundayTime
+  // 获取本周一的日期
+  const startOfWeek = new Date(today)
+  startOfWeek.setHours(0, 0, 0, 0)
+  const day = startOfWeek.getDay() || 7 // 将周日的0转换为7
+  startOfWeek.setDate(startOfWeek.getDate() - day + 1) // 设置为本周一
+  
+  // 获取本周日的日期
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+  endOfWeek.setHours(23, 59, 59, 999)
+  
+  console.log('Week range check:', {
+    date: date.toLocaleString(),
+    startOfWeek: startOfWeek.toLocaleString(),
+    endOfWeek: endOfWeek.toLocaleString(),
+    isInRange: date >= startOfWeek && date <= endOfWeek
+  })
+  
+  return date >= startOfWeek && date <= endOfWeek
 }
 
 function isThisMonth(date: Date, today: Date): boolean {
@@ -305,7 +318,21 @@ function getTodayTasks() {
 
 function getWeekTasks() {
   const today = new Date()
-  return tasks.filter(t => !t.deleted && isThisWeek(new Date(t.createdAt), today))
+  return tasks.filter(t => {
+    if (t.deleted) return false
+    const taskDate = new Date(t.createdAt)
+    // 确保 taskDate 是有效的日期对象
+    if (isNaN(taskDate.getTime())) {
+      console.error('Invalid date for task:', t)
+      return false
+    }
+    console.log('Checking task for week:', {
+      taskId: t.id,
+      taskDate: taskDate.toLocaleString(),
+      isInWeek: isThisWeek(taskDate, today)
+    })
+    return isThisWeek(taskDate, today)
+  })
 }
 
 function getMonthTasks() {
@@ -376,7 +403,7 @@ ipcMain.handle('add-task', (event, task) => {
     saveTasks(tasks)
     console.log('Task added successfully:', newTask)
     
-    // 获取最新的统计数据
+    // 获取最新统计数据
     const stats = getAllStats()
     
     // 通知渲染进程更新任务列表和统计数据

@@ -217,12 +217,20 @@ function isToday(date, today) {
   return date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
 }
 function isThisWeek(date, today) {
-  const todayTime = today.getTime();
-  const dateTime = date.getTime();
-  const dayOfWeek = today.getDay() || 7;
-  const mondayTime = todayTime - (dayOfWeek - 1) * 864e5;
-  const sundayTime = mondayTime + 6 * 864e5;
-  return dateTime >= mondayTime && dateTime <= sundayTime;
+  const startOfWeek = new Date(today);
+  startOfWeek.setHours(0, 0, 0, 0);
+  const day = startOfWeek.getDay() || 7;
+  startOfWeek.setDate(startOfWeek.getDate() - day + 1);
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+  console.log("Week range check:", {
+    date: date.toLocaleString(),
+    startOfWeek: startOfWeek.toLocaleString(),
+    endOfWeek: endOfWeek.toLocaleString(),
+    isInRange: date >= startOfWeek && date <= endOfWeek
+  });
+  return date >= startOfWeek && date <= endOfWeek;
 }
 function isThisMonth(date, today) {
   return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
@@ -241,7 +249,20 @@ function getTodayTasks() {
 }
 function getWeekTasks() {
   const today = /* @__PURE__ */ new Date();
-  return tasks.filter((t) => !t.deleted && isThisWeek(new Date(t.createdAt), today));
+  return tasks.filter((t) => {
+    if (t.deleted) return false;
+    const taskDate = new Date(t.createdAt);
+    if (isNaN(taskDate.getTime())) {
+      console.error("Invalid date for task:", t);
+      return false;
+    }
+    console.log("Checking task for week:", {
+      taskId: t.id,
+      taskDate: taskDate.toLocaleString(),
+      isInWeek: isThisWeek(taskDate, today)
+    });
+    return isThisWeek(taskDate, today);
+  });
 }
 function getMonthTasks() {
   const today = /* @__PURE__ */ new Date();

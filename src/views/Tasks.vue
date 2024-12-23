@@ -781,7 +781,7 @@ interface WeekGroup {
 
 interface MonthGroup {
   totalTasks: number;
-  weeks: Record<string, WeekGroup>;
+  days: Record<string, Task[]>;
 }
 
 // 闭回收站
@@ -829,7 +829,7 @@ const deleteTask = async (task: Task) => {
   }
 }
 
-// ��义响应式变量的类型
+// ��义响应式变���的类型
 const tasks = ref<Task[]>([])
 const todayTasks = ref<Task[]>([])
 const weekTasks = ref<Task[]>([])
@@ -921,7 +921,7 @@ const dashboardTitle = computed((): string => {
 })
 
 // 修改错误处理函数
-const handleError = (error: unknown, context: string): void => {
+const handleError = (error: Error | string | unknown, context: string): void => {
   console.error(`Error in ${context}:`, error)
   let message = '操作失败'
   
@@ -1415,13 +1415,16 @@ const initializeTaskStats = async (): Promise<void> => {
     // 加载各时间维度的任务
     const ranges = ['today', 'week', 'month', 'quarter', 'year'] as const
     for (const range of ranges) {
+      console.log(`Fetching ${range} tasks...`)
       const result = await window.electron.ipcRenderer.invoke('get-range-tasks', range)
+      console.log(`${range} tasks result:`, result)
       if (result && result.tasks) {
         switch (range) {
           case 'today':
             todayTasks.value = result.tasks
             break
           case 'week':
+            console.log('Setting week tasks:', result.tasks.length)
             weekTasks.value = result.tasks
             break
           case 'month':
@@ -1598,12 +1601,30 @@ const showConfig = async () => {
 // 修改任务统计更新函数
 const updateTaskStats = (stats: TaskStats): void => {
   console.log('Updating task stats:', stats)
-  if (stats.today) todayTasks.value = stats.today
-  if (stats.week) weekTasks.value = stats.week
-  if (stats.month) monthTasks.value = stats.month
-  if (stats.quarter) quarterTasks.value = stats.quarter
-  if (stats.year) yearTasks.value = stats.year
-  if (stats.deleted) deletedTasks.value = stats.deleted
+  if (stats.today) {
+    console.log('Today tasks:', stats.today.length)
+    todayTasks.value = stats.today
+  }
+  if (stats.week) {
+    console.log('Week tasks:', stats.week.length)
+    weekTasks.value = stats.week
+  }
+  if (stats.month) {
+    console.log('Month tasks:', stats.month.length)
+    monthTasks.value = stats.month
+  }
+  if (stats.quarter) {
+    console.log('Quarter tasks:', stats.quarter.length)
+    quarterTasks.value = stats.quarter
+  }
+  if (stats.year) {
+    console.log('Year tasks:', stats.year.length)
+    yearTasks.value = stats.year
+  }
+  if (stats.deleted) {
+    console.log('Deleted tasks:', stats.deleted.length)
+    deletedTasks.value = stats.deleted
+  }
 }
 
 // 修改切换日任务显示函数
@@ -1645,17 +1666,60 @@ const formatTime = (dateString: string): string => {
 
 // 修改按天分组的周任务计算属性
 const groupedWeekTasks = computed(() => {
-  const groups: { [key: string]: Task[] } = {}
+  const groups: Record<string, Task[]> = {}
+  const now = new Date()
+  
+  // 获取本周一
+  const startOfWeek = new Date(now)
+  startOfWeek.setHours(0, 0, 0, 0)
+  const day = startOfWeek.getDay() || 7 // 将周日的0转换为7
+  startOfWeek.setDate(startOfWeek.getDate() - day + 1) // 设置为本周一
+  
+  // 获取本周日
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+  endOfWeek.setHours(23, 59, 59, 999)
+
+  console.log('Week range:', { 
+    now: now.toLocaleString(),
+    startOfWeek: startOfWeek.toLocaleString(), 
+    endOfWeek: endOfWeek.toLocaleString(),
+    weekTasksCount: weekTasks.value.length
+  })
+
+  // 初始化本周每天的数组
+  const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+  days.forEach(day => {
+    groups[day] = []
+  })
   
   weekTasks.value.forEach(task => {
-    const date = new Date(task.createdAt)
-    const dayIndex = date.getDay()
-    const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-    const dayName = days[dayIndex]
-    if (!groups[dayName]) {
-      groups[dayName] = []
+    try {
+      const taskDate = new Date(task.createdAt)
+      if (isNaN(taskDate.getTime())) {
+        console.error('Invalid task date:', task)
+        return
+      }
+
+      console.log('Processing task:', {
+        taskId: task.id,
+        taskName: task.name,
+        taskDate: taskDate.toLocaleString(),
+        isInRange: taskDate >= startOfWeek && taskDate <= endOfWeek
+      })
+      
+      // 检查任务是否在本周范围内
+      if (taskDate >= startOfWeek && taskDate <= endOfWeek) {
+        // 将周日的索引从 0 改为 6
+        let dayIndex = taskDate.getDay() - 1
+        if (dayIndex === -1) dayIndex = 6
+        const dayName = days[dayIndex]
+        groups[dayName].push(task)
+        console.log(`Task added to ${dayName}:`, task.name)
+      }
+    } catch (error) {
+      console.error('Error processing task:', error, task)
     }
-    groups[dayName].push(task)
   })
   
   // 对每天的任务按创建时间排序
@@ -1664,13 +1728,14 @@ const groupedWeekTasks = computed(() => {
   })
   
   // 只返回有任务的日期
-  const filteredGroups: { [key: string]: Task[] } = {}
+  const filteredGroups: Record<string, Task[]> = {}
   Object.entries(groups).forEach(([day, tasks]) => {
     if (tasks.length > 0) {
       filteredGroups[day] = tasks
     }
   })
   
+  console.log('Final grouped tasks:', filteredGroups)
   return filteredGroups
 })
 
@@ -1684,7 +1749,7 @@ const toggleWeekTasks = (weekLabel: string): void => {
 
 // 添加按月分组的任务计算属性
 const groupedMonthTasks = computed(() => {
-  const groups: { [key: string]: { totalTasks: number, days: { [key: string]: Task[] } } } = {}
+  const groups: Record<string, MonthGroup> = {}
   
   monthTasks.value.forEach(task => {
     const date = new Date(task.createdAt)
@@ -1705,15 +1770,6 @@ const groupedMonthTasks = computed(() => {
     
     groups[weekLabel].days[dayLabel].push(task)
     groups[weekLabel].totalTasks++
-  })
-  
-  // 对每天的任务按创建时间排序
-  Object.keys(groups).forEach(weekLabel => {
-    Object.keys(groups[weekLabel].days).forEach(dayLabel => {
-      groups[weekLabel].days[dayLabel].sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-    })
   })
   
   return groups
