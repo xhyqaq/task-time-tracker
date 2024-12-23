@@ -1,65 +1,87 @@
 {
   "name": "task-time-tracker",
   "version": "1.0.0",
-  "description": "A modern task management and time tracking application",
+  "description": "A simple and efficient task time tracking tool",
+  "author": "XhyQAQ",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/XhyQAQ/task-time-tracker.git"
+  },
   "main": "dist-electron/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "postinstall": "electron-builder install-app-deps",
-    "build:win": "npm run build && electron-builder --win --config",
-    "build:mac": "npm run build && electron-builder --mac --config",
-    "build:linux": "npm run build && electron-builder --linux --config"
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build && electron-builder",
+    "preview": "vite preview",
+    "release": "vue-tsc --noEmit && vite build && electron-builder --publish always"
   },
-  "dependencies": {
-    "@element-plus/icons-vue": "^2.3.1",
-    "electron-store": "^10.0.0",
-    "element-plus": "^2.5.3",
-    "pinia": "^2.1.7",
-    "vue": "^3.4.15",
-    "vue-router": "^4.2.5"
-  },
-  "devDependencies": {
-    "@types/node": "^20.11.10",
-    "@types/vue-router": "^2.0.0",
-    "@vitejs/plugin-vue": "^5.0.3",
-    "cross-env": "^7.0.3",
-    "electron": "^28.1.4",
-    "electron-builder": "^24.9.1",
-    "electron-vite": "^2.0.0",
-    "sass": "^1.83.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.0.12",
-    "vue-tsc": "^1.8.27"
-  },
-  "keywords": [
-    "electron",
-    "vue",
-    "task-management",
-    "time-tracking"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
   "build": {
-    "appId": "org.xhy.task-time-tracker",
-    "asar": true,
-    "asarUnpack": [
-      "dist/**/*"
-    ],
-    "files": [
-      "dist/**/*",
-      "dist-electron/**/*"
-    ],
-    "directories": {
-      "output": "release/${version}"
-    },
+    "appId": "com.xhyqaq.tasktracker",
+    "productName": "Task Time Tracker",
+    "copyright": "Copyright © 2024 XhyQAQ",
     "mac": {
+      "category": "public.app-category.productivity",
       "target": [
         "dmg",
         "zip"
       ],
-      "category": "public.app-category.productivity"
-    }
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "directories": {
+      "output": "release/${version}"
+    },
+    "files": [
+      "dist",
+      "dist-electron"
+    ],
+    "extraResources": [
+      {
+        "from": "build",
+        "to": "build",
+        "filter": ["**/*"]
+      }
+    ]
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "electron-store": "^8.1.0",
+    "element-plus": "^2.5.3",
+    "vue": "^3.3.11"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.2",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "sass": "^1.70.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "vite-plugin-electron": "^0.15.5",
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vue-tsc": "^1.8.25"
   }
 }

@@ -62,7 +62,7 @@
       v-model="taskDetailVisible"
       :task="currentTask"
       @save="handleSaveTask"
-      v-if="currentTask"
+        v-if="currentTask" 
     />
 
     <!-- 回收站对话框 -->
@@ -157,14 +157,14 @@
           <li>输入管理员密码</li>
           <li>重新打开应用</li>
         </ol>
-      </div>
+          </div>
       <template #footer>
         <div class="dialog-footer">
           <el-checkbox v-model="isFirstTime" label="不再显示" />
           <el-button type="primary" @click="showHelpDialog = false">
             我知道了
           </el-button>
-        </div>
+          </div>
       </template>
     </el-dialog>
   </div>
@@ -532,7 +532,7 @@ const showConfig = async () => {
   try {
     const result = await window.electron.ipcRenderer.invoke('get-config')
     if (result) {
-      configInfo.value = result
+    configInfo.value = result
       showConfigDialog.value = true
     }
   } catch (error) {
@@ -907,7 +907,7 @@ const deleteTask = (task: Task): void => {
   }
 
   code {
-    display: block;
+          display: block;
     margin: 8px 0;
     padding: 8px;
     background-color: var(--el-color-info-light-9);
@@ -917,8 +917,8 @@ const deleteTask = (task: Task): void => {
 }
 
 .dialog-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
 }
 </style>
