@@ -7,14 +7,28 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+.yarn
+.pnp
+.pnp.js
+
+# Build output
 dist
-dist-ssr
-*.local
+dist-electron
+release
+out
+build
+
+# Testing
+coverage
+*.lcov
+.nyc_output
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -22,3 +36,36 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.local
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Electron-specific
+*.asar
+
+# Vue-specific
+.vite
+.vue
+*.vue.js
+*.vue.css
+*.vue.ts
+
+# TypeScript
+*.tsbuildinfo
+
+# Cache and temp files
+.temp
+.cache
+.npm
+.eslintcache
+.stylelintcache
+
+# OS-specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory
