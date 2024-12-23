@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
 import { release } from 'node:os'
 import { join } from 'node:path'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import Store from 'electron-store'
 
 console.log('Main process starting...')
 
@@ -43,6 +44,8 @@ let config = {
 }
 
 const CONFIG_FILE = join(app.getPath('userData'), 'config.json')
+
+const store = new Store()
 
 // 加载配置
 function loadConfig() {
@@ -433,7 +436,7 @@ ipcMain.handle('update-task', (event, updatedTask) => {
     // 获取最新的统计数据
     const stats = getAllStats()
     
-    // 通知渲染进程更新任务列表和统计数据
+    // 通��渲染进程更新任务列表和统计数据
     win?.webContents.send('task-updated', {
       task: tasks[index],
       stats: stats
@@ -572,4 +575,17 @@ ipcMain.handle('clear-all-data', async () => {
       error: error.message
     }
   }
+})
+
+// 添加 IPC 处理器
+ipcMain.handle('get-first-time', () => {
+  return store.get('firstTime', true)
+})
+
+ipcMain.handle('set-first-time', (_, value: boolean) => {
+  store.set('firstTime', value)
+})
+
+ipcMain.handle('is-mac', () => {
+  return process.platform === 'darwin'
 }) 

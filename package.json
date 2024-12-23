@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
+    "electron-store": "^10.0.0",
     "element-plus": "^2.5.3",
     "pinia": "^2.1.7",
     "vue": "^3.4.15",
@@ -54,7 +55,10 @@
       "output": "release/${version}"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.productivity"
     }
   }
