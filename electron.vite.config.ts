@@ -29,6 +29,8 @@ export default defineConfig({
     root: '.',
     build: {
       outDir: 'dist',
+      assetsDir: '.',
+      emptyOutDir: true,
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'index.html')
@@ -40,6 +42,8 @@ export default defineConfig({
         '@': resolve(__dirname, 'src')
       }
     },
-    plugins: [vue()]
+    plugins: [vue()],
+    base: process.env.ELECTRON_RENDERER_URL || './',
+    publicDir: 'public'
   }
 }) 

@@ -39,5 +39,23 @@
     "time-tracking"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "build": {
+    "appId": "org.xhy.task-time-tracker",
+    "asar": true,
+    "asarUnpack": [
+      "dist/**/*"
+    ],
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "directories": {
+      "output": "release/${version}"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.productivity"
+    }
+  }
 }

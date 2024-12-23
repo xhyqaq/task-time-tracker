@@ -6,14 +6,11 @@ const fs = require("fs");
 console.log("Main process starting...");
 process.env.DIST_ELECTRON = node_path.join(__dirname, "..");
 process.env.DIST = node_path.join(process.env.DIST_ELECTRON, "../dist");
-process.env.VITE_PUBLIC = process.env.VITE_DEV_SERVER_URL ? node_path.join(process.env.DIST_ELECTRON, "../public") : process.env.DIST;
-if (!process.env.VITE_DEV_SERVER_URL) {
-  process.env.VITE_DEV_SERVER_URL = "http://localhost:5173";
-}
+process.env.PUBLIC = process.env.VITE_DEV_SERVER_URL ? node_path.join(process.env.DIST_ELECTRON, "../public") : process.env.DIST;
 console.log("Environment paths:", {
   DIST_ELECTRON: process.env.DIST_ELECTRON,
   DIST: process.env.DIST,
-  VITE_PUBLIC: process.env.VITE_PUBLIC,
+  PUBLIC: process.env.PUBLIC,
   VITE_DEV_SERVER_URL: process.env.VITE_DEV_SERVER_URL,
   NODE_ENV: process.env.NODE_ENV,
   __dirname,
@@ -97,6 +94,7 @@ async function createWindow() {
       preload: node_path.join(__dirname, "../preload/index.js"),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
       webSecurity: false,
       devTools: true
     }
@@ -104,39 +102,54 @@ async function createWindow() {
   console.log("Loading URL...");
   if (process.env.VITE_DEV_SERVER_URL) {
     console.log("Development mode detected");
-    console.log("Dev server URL:", process.env.VITE_DEV_SERVER_URL);
-    try {
-      await win.loadURL(process.env.VITE_DEV_SERVER_URL);
-      console.log("Successfully loaded dev server URL");
-    } catch (error) {
-      console.error("Failed to load dev server URL:", error);
-      try {
-        const indexPath = node_path.join(process.env.DIST || "", "index.html");
-        console.log("Fallback: Loading local file:", indexPath);
-        await win.loadFile(indexPath);
-      } catch (fallbackError) {
-        console.error("Failed to load fallback file:", fallbackError);
-      }
-    }
+    await win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     console.log("Production mode detected");
+    const indexHtml = node_path.join(process.env.DIST, "index.html");
+    console.log("Loading index from:", indexHtml);
     try {
-      const indexPath = node_path.join(process.env.DIST || "", "index.html");
-      console.log("Index HTML path:", indexPath);
-      await win.loadFile(indexPath);
-      console.log("Successfully loaded production file");
+      if (!fs.existsSync(indexHtml)) {
+        console.error("index.html does not exist at:", indexHtml);
+        console.log("Current directory structure:");
+        console.log("DIST directory exists:", fs.existsSync(process.env.DIST));
+        console.log("DIST directory contents:", fs.existsSync(process.env.DIST) ? fs.readFileSync(node_path.join(process.env.DIST, "*")) : "N/A");
+        throw new Error("index.html not found");
+      }
+      const indexContent = fs.readFileSync(indexHtml, "utf8");
+      console.log("index.html content length:", indexContent.length);
+      await win.loadFile(indexHtml);
+      console.log("Successfully loaded index.html");
     } catch (error) {
-      console.error("Failed to load production file:", error);
+      console.error("Failed to load index.html:", error);
+      try {
+        const backupPath = electron.app.getAppPath();
+        const backupIndexHtml = node_path.join(backupPath, "dist", "index.html");
+        console.log("Trying backup path:", backupIndexHtml);
+        await win.loadFile(backupIndexHtml);
+      } catch (backupError) {
+        console.error("Backup loading also failed:", backupError);
+      }
     }
   }
   win.webContents.openDevTools();
-  console.log("DevTools opened");
+  win.webContents.on("did-start-loading", () => {
+    console.log("Window started loading");
+  });
   win.webContents.on("did-finish-load", () => {
     console.log("Window finished loading");
     win?.webContents.send("load-tasks", tasks);
   });
-  win.webContents.on("did-fail-load", (event, errorCode, errorDescription) => {
-    console.error("Failed to load:", errorCode, errorDescription);
+  win.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
+    console.error("Failed to load:", {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      env: {
+        DIST: process.env.DIST,
+        VITE_DEV_SERVER_URL: process.env.VITE_DEV_SERVER_URL,
+        NODE_ENV: process.env.NODE_ENV
+      }
+    });
   });
   win.webContents.on("dom-ready", () => {
     console.log("DOM is ready");
@@ -146,6 +159,12 @@ async function createWindow() {
   });
   win.on("unresponsive", () => {
     console.error("Window became unresponsive");
+  });
+  win.webContents.on("did-fail-provisional-load", (...args) => {
+    console.error("Provisional load failed:", ...args);
+  });
+  win.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    console.log("Console message:", { level, message, line, sourceId });
   });
 }
 electron.app.whenReady().then(() => {
