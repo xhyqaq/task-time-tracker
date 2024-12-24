@@ -2,6 +2,20 @@
 
 一个现代化的任务管理和时间追踪应用程序，基于 Electron + Vue 3 + TypeScript 构建。
 
+该软件的核心就是不用鼠标完成任务管理！！！
+
+
+
+## 快捷键
+
+`Command + i` 创建任务
+`Command + 1-9` 选中任务
+`Command + d` 打开任务详情
+`Command + Enter` 完成任务
+`Command + Delete` 删除任务
+选中任务后还可通过 ⬆️ ⬇️ 切换任务
+
+
 ## Mac 安装说明
 
 由于应用未经过 Apple 签名认证，首次打开时可能会提示"无法打开，因为 Apple 无法检查其是否包含恶意软件"。这是正常现象，解决方法如下：
@@ -38,6 +52,8 @@ xattr -cr /Applications/TaskTimeTracker.app
 - 🎯 目标设置：为任务设置目标完成时间
 - 💾 数据持久化：自动保存所有数据
 - 🖥️ 跨平台支持：支持 Windows、macOS 和 Linux（目前快捷键只在mac支持）
+
+
 
 ## 技术栈
 
