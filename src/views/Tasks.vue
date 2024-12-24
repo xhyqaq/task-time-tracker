@@ -1618,8 +1618,14 @@ const toggleDayTasks = (day: string): void => {
 const getTaskTimeLabel = (createdAt: string): string => {
   const now = new Date()
   const taskDate = new Date(createdAt)
-  const diffDays = Math.floor((now.getTime() - taskDate.getTime()) / (1000 * 60 * 60 * 24))
-  
+
+  // 重置时间为当天的 00:00:00
+  const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const taskStartDate = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate())
+
+  // 计算天数差
+  const diffDays = Math.floor((nowDate.getTime() - taskStartDate.getTime()) / (1000 * 60 * 60 * 24))
+
   if (diffDays === 0) return ''
   if (diffDays === 1) return '昨日任务'
   if (diffDays === 2) return '前日任务'
