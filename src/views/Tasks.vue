@@ -153,10 +153,18 @@
                   <span class="task-index">{{ index + 1 }}</span>
                   <span class="task-name">{{ task.name }}</span>
                   <el-tag v-if="task.description" size="small" type="success">额外说明</el-tag>
+                  <el-tag 
+                    v-if="!isToday(new Date(task.createdAt))" 
+                    size="small" 
+                    type="warning"
+                    effect="dark"
+                  >
+                    {{ getTaskTimeLabel(task.createdAt) }}
+                  </el-tag>
                 </div>
                 <div class="task-actions">
                   <el-tag type="success" size="small" class="status-tag">已完成</el-tag>
-                  <span class="task-date">{{ formatDate(task.createdAt) }}</span>
+                  <span class="task-date">{{ formatDate(task.updatedAt || task.createdAt) }}</span>
                 </div>
               </div>
             </div>
@@ -749,6 +757,7 @@ interface Task {
   deleted?: boolean;
   deletedAt?: string | null;
   description?: string;
+  updatedAt?: string;
 }
 
 interface TaskStats {
@@ -898,10 +907,15 @@ const completedTasks = computed(() =>
   tasks.value
     .filter(task => {
       if (!task.completed || task.deleted) return false
-      const taskDate = new Date(task.createdAt)
-      return isToday(taskDate)
+      // 检查任务的完成时间是否是今天
+      const completedDate = task.updatedAt ? new Date(task.updatedAt) : new Date(task.createdAt)
+      return isToday(completedDate)
     })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .sort((a, b) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt) : new Date(a.createdAt)
+      const dateB = b.updatedAt ? new Date(b.updatedAt) : new Date(b.createdAt)
+      return dateB.getTime() - dateA.getTime()
+    })
 )
 
 const completionRate = computed(() => {
