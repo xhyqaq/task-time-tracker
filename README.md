@@ -4,15 +4,20 @@
 
 该软件的核心就是不用鼠标完成任务管理！！！
 
-
+![输入图片说明](src/assets/image.png)
 
 ## 快捷键
 
 `Command + i` 创建任务
+
 `Command + 1-9` 选中任务
+
 `Command + d` 打开任务详情
+
 `Command + Enter` 完成任务
+
 `Command + Delete` 删除任务
+
 选中任务后还可通过 ⬆️ ⬇️ 切换任务
 
 
